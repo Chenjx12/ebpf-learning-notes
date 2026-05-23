@@ -24,8 +24,8 @@
 | [One](./docs/One、什么是%20eBPF.md) | 什么是 eBPF | 核心概念、Verifier、JIT、Maps |
 | [Two](./docs/Two、云原生下的%20eBPF.md) | 云原生下的 eBPF | 网络管理、可观测性、安全防护 |
 | [Three](./docs/Three、eBPF%20的%20Hello%20%20World.md) | Hello World | BCC框架、kprobe、Perf/Ring Buffer |
-| - | 简章 | 从 Pwn 手到云原生的逆旅 |
-| - | 项目环境 | Ubuntu 22.04 虚拟机配置指南 |
+| [简章](./docs/简章.md) | 项目背景 | 从 Pwn 手到云原生的逆旅 |
+| [项目环境](./docs/项目环境.md) | 环境配置 | Ubuntu 22.04 虚拟机配置指南 |
 
 ---
 

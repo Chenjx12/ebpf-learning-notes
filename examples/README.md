@@ -191,9 +191,10 @@ kprobe 挂钩在 execve 入口时,子进程的 comm 还未被替换,仍显示为
 
 ## 📚 相关文档
 
-- [Three、eBPF 的 Hello World](../Three、eBPF%20的%20Hello%20%20World.md) - 详细教程
+- [Three、eBPF 的 Hello World](../docs/Three、eBPF%20的%20Hello%20%20World.md) - 详细教程
 - [FAQ](../FAQ.md) - 常见问题解答
 - [setup.sh](../setup.sh) - 环境搭建脚本
+- [项目环境](../docs/项目环境.md) - Ubuntu环境配置指南
 
 ---
 
