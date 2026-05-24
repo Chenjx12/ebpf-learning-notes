@@ -4,16 +4,13 @@ date: 2026.5.24
 
 ---
 
-## 🎯 本篇目标
+在上一篇文章里，我们从 `trace_printk` 一路杀到了 Ring Buffer，甚至还能用 tracepoint 抓到被执行的命令路径。但是，当你写下 `b = BPF(text=program)` 并按下回车时，有没有一种感觉：
 
-从"会写 BCC 代码"进化到"理解 eBPF 程序 internals",并学会工程化组织代码。
+**这玩意儿到底是怎么跑进内核的？**
 
-**核心问题:**
-- BCC 的 `BPF(text=program)` 背后发生了什么?
-- 如何查看内核中正在运行的 eBPF 程序?
-- 如何把 C 代码和 Python 代码分离,提升可维护性?
+我们写了类 C 代码，它却跑在了内核态；我们没手动编译，它却奇迹般地生效了。BCC 就像一个黑盒，替我们挡住了底层的复杂度。
 
-**预计长度:** 中等偏短(比第三篇短 30-40%),因为偏动手验证而非学新 API
+今天，我们就来打开这个黑盒，做一次“解剖”。同时，我会把之前突然顿悟的 **C/Python 分离** 工程实践落地，顺便把咱们的代码仓库整理得像模像样。
 
 ---
 
@@ -30,12 +27,10 @@ date: 2026.5.24
 但一直有个**黑盒**:
 
 ```
-你写的 C 字符串  →  [BCC 黑盒]  →  内核里跑的 eBPF 程序
+我们写的 C 字符串  →  [BCC 黑盒]  →  内核里跑的 eBPF 程序
 ```
 
 我们不知道中间发生了什么。这篇就是**打开这个黑盒**,看看从源码到字节码的完整链路。
-
-同时,把你刚悟出来的 **C/Python 分离** 工程实践落地。
 
 ---
 
@@ -43,7 +38,7 @@ date: 2026.5.24
 
 ### 1.1 BCC 的编译链路
 
-当你执行这行代码时:
+当我们执行这行代码时:
 
 ```python
 b = BPF(text=program)
@@ -69,53 +64,66 @@ flowchart LR
 4. **JIT**: Just-In-Time 编译为本地机器码,提升性能
 5. **附加**: 把程序挂钩到指定的探针点(kprobe/uprobe/tracepoint)
 
-### 1.2 实验:让 BCC 留下中间文件
+### 1.2 实验:手动用 clang 编译(🔥 推荐)
 
-**目标:** 找到 BCC 编译过程中的 `.c` 和 `.o` 文件
+**目标:** 不依赖 BCC 的黑盒,手动完成从 C 代码到 eBPF 字节码的编译过程,并理解其结构。
 
-**方法:** 在 Python 里加 `debug=4` 参数
+**⚠️ 为什么推荐手动编译?**
+- **完全可控**: 清楚知道每一个编译参数和步骤。
+- **标准化**: 这是生产环境和使用 libbpf/bpftool 时的标准工作流。
+- **调试友好**: 可以独立于 Python/BCC 测试 C 代码的正确性。
 
-```python
-#!/usr/bin/python3
-from bcc import BPF
+#### **步骤 1: 创建独立的 C 文件**
 
-program = r"""
-int hello(void *ctx) {
-    bpf_trace_printk("Hello from debug mode!");
+创建 `hello-debug.c`:
+
+```c
+#include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
+
+// 定义许可证(必须的,否则内核拒绝加载)
+char LICENSE[] SEC("license") = "GPL";
+
+// eBPF程序入口点
+// SEC("kprobe/sys_execve") 告诉编译器将此函数放入名为 "kprobe/sys_execve" 的段
+SEC("kprobe/sys_execve")
+int hello(struct pt_regs *ctx) {
+    bpf_trace_printk("Hello from manual clang compile!");
     return 0;
 }
-"""
-
-# 关键:添加 debug=4,BCC 会把中间文件写到 /tmp/
-b = BPF(text=program, debug=4)
-
-syscall = b.get_syscall_fnname("execve")
-b.attach_kprobe(event=syscall, fn_name="hello")
-
-print("运行中...请检查 /tmp/bcc_* 目录")
-b.trace_print()
 ```
 
-**运行后查看中间文件:**
+#### **步骤 2: 用 clang 手动编译**
+
+确保你安装了 `clang` 和内核头文件 (`linux-headers-$(uname -r)`).
 
 ```bash
-# 新开终端
-ls -lh /tmp/bcc_*
-# 你会看到类似:
-# /tmp/bcc_12345.c      ← BCC 生成的 C 代码
-# /tmp/bcc_12345.o      ← 编译后的 eBPF 字节码
+# 方法A: 直接使用编译命令
+clang -target bpf \
+      -O2 \
+      -g \
+      -c hello-debug.c \
+      -o hello-debug.o
+
+# 方法B: 如果有自动化脚本 (可选)
+# chmod +x build-ebpf.sh
+# ./build-ebpf.sh hello-debug.c
 ```
 
-**截图占位符:** 
-> 📸 在这里插入 `/tmp/bcc_*` 文件的截图
+**参数解释:**
+- `-target bpf`: 指定目标架构为 eBPF。
+- `-O2`: 优化等级, eBPF 验证器通常要求代码经过优化。
+- `-g`: 生成调试信息(可选,便于 bpftool 查看源码对应关系)。
+- `-c`: 只编译不链接。
 
-### 1.3 用 readelf 看编译产物
-
-**目标:** 理解 eBPF 程序的"零件清单"
+#### **步骤 3: 查看编译产物**
 
 ```bash
-# 查看 .o 文件的段结构
-readelf -S /tmp/bcc_12345.o
+# 查看生成的 .o 文件大小
+ls -lh hello-debug.o
+
+# 用 readelf 查看段结构
+readelf -S hello-debug.o
 ```
 
 **典型输出:**
@@ -128,25 +136,91 @@ Section Headers:
        0000000000000048  0000000000000000  AX       0     0     8
   [ 2] license           PROGBITS        0000000000000000  00000088
        0000000000000004  0000000000000000   A       0     0     1
-  [ 3] maps              PROGBITS        0000000000000000  00000090
-       000000000000001c  0000000000000000   A       0     0     4
-  [ 4] .strtab           STRTAB          0000000000000000  000000ac
-       0000000000000050  0000000000000000           0     0     1
+  [ 3] kprobe/sys_execve PROGBITS        0000000000000000  00000090
+       000000000000001a  0000000000000000   A       0     0     1
 ```
 
 **关键字段解释:**
-- `.text`: eBPF 程序的字节码指令
-- `license`: 许可证(必须是 GPL 兼容的)
-- `maps`: 定义的 map 结构(Hash/Perf/Ring Buffer)
+- `.text`: 默认的函数代码段。
+- `license`: 许可证字符串,内核加载时会检查。
+- `kprobe/sys_execve`: 我们定义的探针函数所在的段。段名决定了它将被附加到哪里(BCC/libbpf 会解析这个段名)。
 
 **截图占位符:**
-> 📸 在这里插入 `readelf` 输出的截图
+> 📸 在这里插入 `readelf -S hello-debug.o` 输出的截图
+
+#### **步骤 4: 用 Python/BCC 加载已编译的 .o 文件**
+
+虽然我们可以用 `bpftool` 直接加载,但为了保持与前文一致,这里演示如何用 BCC 加载手动编译的对象文件。
+
+创建 `load-compiled.py`:
+
+```python
+from bcc import BPF
+
+# 关键: 用 src_file 加载已编译的 .o 文件
+# 注意: BCC 的 src_file 通常期望 C 源码,但在较新版本或特定用法下可处理对象文件
+# 更通用的方式是使用 BPF 的 obj_file 参数(如果支持)或继续使用 text/src_file 让 BCC 重新编译
+# 这里为了演示"手动编译产物"的概念,我们假设你只是想确认 .o 文件存在且合法。
+# 实际上, BCC 的 BPF(src_file="hello-debug.c") 内部也是调用 clang。
+# 若要真正加载 .o, 通常推荐使用 libbpf 或 bpftool。
+# 但在 BCC 中, 我们可以这样验证我们的 C 代码是独立的:
+
+b = BPF(src_file="hello-debug.c") # BCC 会再次编译它,但我们可以对比手动编译的 .o
+
+syscall = b.get_syscall_fnname("execve")
+b.attach_kprobe(event=syscall, fn_name="hello")
+
+print("监控 execve,按 Ctrl-C 退出")
+b.trace_print()
+```
+
+*注: 严格来说, BCC 主要设计用于从源码编译。如果你希望直接加载 `.o` 文件, **bpftool** 是更好的选择:*
+
+```bash
+sudo bpftool prog load hello-debug.o /sys/fs/bpf/hello-debug
+sudo bpftool prog attach pinned /sys/fs/bpf/hello-debug kprobe sys_execve
+```
+
+**✅ 手动编译的优势:**
+- 不依赖 BCC 的黑盒行为。
+- 可以看到每一个编译步骤。
+- C 代码独立编辑,有语法高亮。
+- 可以用标准工具(readelf/objdump)分析。
+- **这是转向 libbpf 和现代 eBPF 开发的基础。**
+
+---
+
+### 1.3 备选方案:让 BCC 留下中间文件
+
+如果你坚持使用 BCC 的 `text=` 模式并想查看其生成的中间文件,可以尝试以下方法。
+
+**⚠️ 重要提示:** `debug=4` 参数在不同 BCC 版本中行为可能不同。
+
+#### **方法A: 使用环境变量**
+
+```bash
+export BCC_SAVE_TEMP_FILES=1
+sudo python3 your-script.py
+```
+
+#### **方法B: 使用更强的 debug 级别**
+
+```python
+b = BPF(text=program, debug=0x1f)
+```
+
+#### **查看中间文件:**
+
+```bash
+sudo find /tmp -name "*bcc*" -type f 2>/dev/null
+```
 
 ### 💡 关键收获
 
-- BCC 不是"魔法",它就是帮你调 `clang + bpf()` 系统调用
-- 编译过程产生 `.c` → `.o` → 加载进内核
-- 可以用标准工具(readelf/objdump)分析编译产物
+- BCC 不是"魔法",它就是帮你调 `clang + bpf()` 系统调用。
+- **手动编译**能让你彻底理解从源码到字节码的过程。
+- 编译产物(.o)包含段(Segments),如 `.text`, `license`, 以及探针特定的段(如 `kprobe/xxx`)。
+- 可以用标准工具(readelf/objdump)分析编译产物。
 
 ---
 
@@ -301,7 +375,7 @@ sudo bpftool map dump id 456
 
 **现在的写法(混合版):**
 
-```python
+```
 #!/usr/bin/python3
 from bcc import BPF
 
@@ -347,7 +421,7 @@ hello-perf-plus.py  ← 只做加载和回调(简洁清晰)
 
 创建 `hello-perf-plus.c`:
 
-```c
+```
 // hello-perf-plus.c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
@@ -389,7 +463,7 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
 
 创建新的 [hello-perf-plus.py](file://f:\test-for-mcp\ebpf-learning-notes\examples\hello-perf-plus.py):
 
-```python
+```
 #!/usr/bin/python3
 """
 eBPF Tracepoint 示例(C/Python 分离版) - 获取被执行的完整命令路径
@@ -461,123 +535,16 @@ PID=  4768 UID=    0 CALLER=sudo             → CMD=/usr/bin/su
 
 - C/Python 分离是**工程化的第一步**
 - `BPF(src_file=)` 和 `BPF(text=)` 完全等价
-- 从现在开始养成好习惯,后面做毕设项目时会受益无穷
+- 从现在开始养成好习惯,后面做项目时会受益无穷
 
 ---
 
-## 4. 整理你的仓库:目录结构规范化
+## 4. 小结 + 预告
 
-### 4.1 当前问题
-
-之前的结构:
-
-```
-ebpf-learning-notes/
-├── README.md
-├── FAQ.md
-├── One、什么是 eBPF.md          ← 笔记和代码混在一起
-├── Three、eBPF 的 Hello World.md
-└── examples/                    ← 所有代码堆在一个目录
-    ├── hello-world.py
-    └── hello-perf-plus.py
-```
-
-**问题:**
-- ❌ 笔记文件和代码文件混在根目录
-- ❌ 无法区分哪篇笔记对应哪些代码
-- ❌ 随着内容增多,根目录会越来越乱
-
-### 4.2 推荐的新结构
-
-```
-ebpf-learning-notes/
-├── README.md                     # 项目总览
-├── FAQ.md                        # 常见问题
-├── LICENSE                       # MIT协议
-├── setup.sh                      # 环境搭建脚本
-├── .gitignore                    # Git忽略配置
-│
-├── docs/                         # 📚 学习笔记目录
-│   ├── One、什么是 eBPF.md
-│   ├── Two、云原生下的 eBPF.md
-│   ├── Three、eBPF 的 Hello World.md
-│   ├── Four、eBPF 程序的解剖与工程化.md  ← 本篇
-│   ├── 简章.md
-│   └── 项目环境.md
-│
-└── code/                         # 💻 实验代码目录
-    ├── 03-hello-world/           # 第三篇的代码
-    │   ├── hello-world.py
-    │   ├── hello-openat.py
-    │   ├── hello-map.py
-    │   ├── hello-perf.py
-    │   ├── hello-ring.py
-    │   └── hello-perf-plus.py    # 混合版(留作对比)
-    │
-    └── 04-anatomy/               # 第四篇的代码
-        ├── hello-perf-plus.c     # ← 分离后的 C 代码
-        └── hello-perf-plus.py    # ← 分离后的 Python
-```
-
-**优点:**
-- ✅ 笔记和代码物理分离
-- ✅ 每篇笔记对应一个代码目录,一目了然
-- ✅ 根目录保持简洁
-- ✅ 为后续扩展预留空间(如 `advanced/`, `research/` 等)
-
-### 4.3 执行重构
-
-**步骤 1: 创建新目录**
-
-```bash
-mkdir -p code/03-hello-world
-mkdir -p code/04-anatomy
-```
-
-**步骤 2: 移动现有代码**
-
-```bash
-# 移动第三篇的代码
-mv examples/hello-world.py code/03-hello-world/
-mv examples/hello-openat.py code/03-hello-world/
-mv examples/hello-map.py code/03-hello-world/
-mv examples/hello-perf.py code/03-hello-world/
-mv examples/hello-ring.py code/03-hello-world/
-mv examples/hello-perf-plus.py code/03-hello-world/
-
-# 移动第四篇的代码(等你拆分完成后)
-# mv code/04-anatomy/hello-perf-plus.c code/04-anatomy/
-# mv code/04-anatomy/hello-perf-plus.py code/04-anatomy/
-```
-
-**步骤 3: 更新 examples/README.md**
-
-将 [`examples/README.md`](../examples/README.md) 移动到 [`code/03-hello-world/README.md`](../code/03-hello-world/README.md)
-
-**步骤 4: 提交 commit**
-
-```bash
-git add .
-git commit -m "Reorganize project structure: separate notes and code"
-git push origin main
-```
-
-**截图占位符:**
-> 📸 在这里插入 GitHub 仓库新结构的截图
-
-### 💡 关键收获
-
-- 好习惯从现在开始培养
-- 后面代码量大了不用再重构
-- 每篇笔记对应一个代码目录,便于复习和演示
-
----
-
-## 5. 小结 + 预告
-
-### 5.1 本篇总结
+### 4.1 本篇总结
 
 **理论层面:**
+
 - ✅ 理解了 BCC 编译链路: C → clang → .o → bpf() → 内核
 - ✅ 学会了用 `debug=4` 查看中间文件
 - ✅ 掌握了 `bpftool` 的基本用法(prog list / map list / dump)
@@ -591,19 +558,21 @@ git push origin main
 > **不要停留在"会用 BCC",要理解背后的机制。**  
 > **不要满足于"能跑",要追求"好维护"。**
 
-### 5.2 预告第五篇
+### 4.2 预告第五篇
 
-现在你的程序都是"一整坨"——一个 `hello()` 函数干所有事。
+现在我们的程序都是"一整坨"——一个 `hello()` 函数干所有事。
 
 如果逻辑复杂了怎么办?
 
 **第五篇讲:**
+
 - BPF-to-BPF 函数调用(代码复用)
 - 尾调用(Tail Call)(不回来的调用)
 - 原书第3章后半段 + hello-tail.py 实验
 - 为你的多探针架构打基础
 
 **核心问题:**
+
 - 如何在 eBPF 中实现函数调用?(受限于 512 字节栈)
 - 尾调用和普通函数调用有什么区别?(不返回、复用栈帧)
 - 如何用尾调用实现"程序链"?(动态分派)
