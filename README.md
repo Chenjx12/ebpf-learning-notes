@@ -49,7 +49,7 @@ cd ebpf-learning-notes
 sudo apt install bpfcc-tools linux-headers-$(uname -r)
 
 # 3. 运行 Hello World 示例
-sudo python3 examples/hello-world.py
+sudo python3 code/03-hello-world/hello-world.py
 
 # 4. 新开终端执行 ls, ps 等命令观察输出
 ```
@@ -70,14 +70,20 @@ ebpf-learning-notes/
 ├── docs/                  # 学习笔记
 │   ├── One、什么是 eBPF.md
 │   ├── Two、云原生下的 eBPF.md
-│   ├── Three、eBPF 的 Hello  World.md
+│   ├── Three、eBPF 的 Hello World.md
+│   ├── Four、eBPF 程序的解剖与工程化.md
 │   ├── 简章.md
 │   └── 项目环境.md
-└── examples/              # 示例代码
-    ├── hello-world.py     # 基础 Hello World
-    ├── hello-openat.py    # openat 监控
-    ├── hello-perf.py      # Perf Buffer 示例
-    └── hello-ring.py      # Ring Buffer 示例
+└── code/                  # 实验代码
+    ├── 03-hello-world/    # 第三篇:基础示例
+    │   ├── hello-world.py
+    │   ├── hello-openat.py
+    │   ├── hello-map.py
+    │   ├── hello-perf.py
+    │   ├── hello-ring.py
+    │   └── hello-perf-plus.py
+    └── 04-anatomy/        # 第四篇:程序解剖(待填充)
+        └── (待添加 C/Python 分离的代码)
 ```
 
 ---
@@ -151,7 +157,7 @@ type exit
 
 所有示例均在以下环境测试通过：
 
-```yaml
+```
 OS: Ubuntu 22.04 LTS (VMware 虚拟机)
 Kernel: 5.15.0-generic
 CPU: 4 cores (2×2)
@@ -214,10 +220,10 @@ Python: 3.10.6
 - ✅ 掌握 Ring Buffer 机制
 - ✅ 研究容器逃逸案例
 
-### 第 4 周：项目实战
+### 第 4 周：工程化与进阶
+- ✅ 用 bpftool 查看运行中的程序
+- ✅ C/Python 代码分离
 - ✅ 设计简单的逃逸检测器
-- ✅ 整合多个监控点
-- ✅ 输出检测结果
 
 ---
 
