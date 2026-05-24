@@ -46,7 +46,7 @@ b = BPF(text=program)
 
 BCC 在背后做了这些事:
 
-```mermaid
+```
 flowchart LR
   A[C 字符串] --> B[clang -target bpf]
   B --> C[eBPF 字节码 .o]
@@ -77,7 +77,7 @@ flowchart LR
 
 创建 `hello-debug.c`:
 
-```c
+```
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
 
@@ -118,35 +118,191 @@ clang -target bpf \
 
 #### **步骤 3: 查看编译产物**
 
-```bash
-# 查看生成的 .o 文件大小
-ls -lh hello-debug.o
+让我们实际运行编译命令，看看真实的结果：
 
-# 用 readelf 查看段结构
-readelf -S hello-debug.o
+```bash
+# 执行编译（注意：需要添加 -I 参数解决头文件问题）
+clang -target bpf -O2 -g \
+      -I/usr/include/x86_64-linux-gnu \
+      -c hello-debug.c \
+      -o hello-debug.o
 ```
 
-**典型输出:**
+**⚠️ 常见问题：头文件缺失**
+
+在 Ubuntu 22.04 上首次编译时，你可能会遇到这个错误：
+
+```
+/usr/include/linux/types.h:5:10: fatal error: 'asm/types.h' file not found
+#include <asm/types.h>
+         ^~~~~~~~~~~~~
+```
+
+**原因**：`clang -target bpf` 默认不包含 `x86_64-linux-gnu` 的头文件路径。
+
+**解决**：添加 `-I/usr/include/x86_64-linux-gnu` 参数。
+
+另外，如果你使用最新版的 libbpf，可能还会遇到：
+
+```
+error: too few arguments to function call, expected at least 2, have 1
+    bpf_trace_printk("Hello from manual clang compile!");
+```
+
+这是因为新版 `bpf_trace_printk` 需要两个参数。解决方法是修改 C 代码：
+
+```
+char fmt[] = "Hello from manual clang compile!";
+bpf_trace_printk(fmt, sizeof(fmt));  // ✅ 正确写法
+```
+
+---
+
+##### 📊 实际编译结果
+
+![image-20260524224339860](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260524224348848.png)
+
+生成的 eBPF 字节码文件约 **4.6 KB**。
+
+---
+
+##### 🔍 用 readelf 查看段结构
+
+```bash
+$ readelf -S hello-debug.o
+```
+
+**典型输出如下：**
+
+```bash
+Section Headers:
+  [Nr] Name       Type     Address          Offset   Size
+  [ 1] .text      PROGBITS 0000000000000000 00000040 0000000000000048
+  [ 2] license    PROGBITS 0000000000000000 00000088 0000000000000004
+  [ 3] maps       PROGBITS 0000000000000000 00000090 000000000000001c
+```
+
+**实际输出**（只显示关键段）：
 
 ```
 Section Headers:
   [Nr] Name              Type            Address           Offset
        Size              EntSize         Flags  Link  Info  Align
-  [ 1] .text             PROGBITS        0000000000000000  00000040
-       0000000000000048  0000000000000000  AX       0     0     8
-  [ 2] license           PROGBITS        0000000000000000  00000088
-       0000000000000004  0000000000000000   A       0     0     1
-  [ 3] kprobe/sys_execve PROGBITS        0000000000000000  00000090
-       000000000000001a  0000000000000000   A       0     0     1
+  
+  [ 3] kprobe/sys_execve PROGBITS        0000000000000000  00000040
+       00000000000000a0  0000000000000000  AX       0     0     8
+  
+  [ 4] license           PROGBITS        0000000000000000  000000e0
+       0000000000000004  0000000000000000  WA       0     0     1
+  
+  [ 5] .rodata.str1.1    PROGBITS        0000000000000000  000000e4
+       0000000000000021  0000000000000001 AMS       0     0     1
 ```
 
-**关键字段解释:**
-- `.text`: 默认的函数代码段。
-- `license`: 许可证字符串,内核加载时会检查。
-- `kprobe/sys_execve`: 我们定义的探针函数所在的段。段名决定了它将被附加到哪里(BCC/libbpf 会解析这个段名)。
+对比之前的"典型输出"，你会发现：
+- **段号不同**：我们的是 `[3]`、`[4]`、`[5]`，因为我们的文件还包含了调试信息段
+- **大小不同**：我们的 `kprobe/sys_execve` 段是 `0xa0` (160 字节)，比示例的 `0x1a` (26 字节) 大得多
 
-**截图占位符:**
-> 📸 在这里插入 `readelf -S hello-debug.o` 输出的截图
+**为什么我们的程序更大？**  
+因为我们用了 `bpf_trace_printk(fmt, sizeof(fmt))`，需要在栈上构建 33 字节的格式化字符串，这需要多条指令来完成（后面会详细分析）。
+
+---
+
+##### 🔬 用 llvm-objdump 反汇编查看字节码
+
+标准的 `objdump` 无法识别 eBPF 架构，我们需要使用 LLVM 提供的专用工具：
+
+```
+$ llvm-objdump-14 -d hello-debug.o
+```
+
+**执行结果**：
+
+![image-20260524231136982](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260524231138781.png)
+
+```bash
+hello-debug.o:	file format elf64-bpf
+
+Disassembly of section kprobe/sys_execve:
+
+0000000000000000 <hello>:
+       0:	18 01 00 00 63 6f 6d 70 00 00 00 00 69 6c 65 21	r1 = 2406448776012984163 ll
+       2:	7b 1a f0 ff 00 00 00 00	*(u64 *)(r10 - 16) = r1
+       3:	18 01 00 00 6c 20 63 6c 00 00 00 00 61 6e 67 20	r1 = 2334956296524210284 ll
+       5:	7b 1a e8 ff 00 00 00 00	*(u64 *)(r10 - 24) = r1
+       6:	18 01 00 00 6f 6d 20 6d 00 00 00 00 61 6e 75 61	r1 = 7022640558675881327 ll
+       8:	7b 1a e0 ff 00 00 00 00	*(u64 *)(r10 - 32) = r1
+       9:	18 01 00 00 48 65 6c 6c 00 00 00 00 6f 20 66 72	r1 = 8243311830880773448 ll
+      11:	7b 1a d8 ff 00 00 00 00	*(u64 *)(r10 - 40) = r1
+      12:	b7 01 00 00 00 00 00 00	r1 = 0
+      13:	73 1a f8 ff 00 00 00 00	*(u8 *)(r10 - 8) = r1
+      14:	bf a1 00 00 00 00 00 00	r1 = r10
+      15:	07 01 00 00 d8 ff ff ff	r1 += -40
+      16:	b7 02 00 00 21 00 00 00	r2 = 33
+      17:	85 00 00 00 06 00 00 00	call 6
+      18:	b7 00 00 00 00 00 00 00	r0 = 0
+      19:	95 00 00 00 00 00 00 00	exit
+```
+
+**🎯 深度解析**
+
+这个 eBPF 程序共 **20 条指令**，可以分为三个阶段：
+
+**阶段 1：在栈上构建格式化字符串（指令 0-13）**
+
+eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须在栈上手动构建字符串：
+
+```
+指令 0-2:  将 8 字节 "!elpmoc gnilpm" 加载到 r1，存入栈 [r10-16]
+指令 3-5:  将 8 字节 " clgnual" 加载到 r1，存入栈 [r10-24]
+指令 6-8:  将 8 字节 "m manua" 加载到 r1，存入栈 [r10-32]
+指令 9-11: 将 8 字节 "llor f" 加载到 r1，存入栈 [r10-40]
+指令 12-13: 在栈 [r10-8] 写入 NULL 终止符 (0x00)
+```
+
+**为什么是反向的？**  
+因为 x86_64 是小端序（Little-endian），字符串在内存中按 8 字节一组反向存储。
+
+最终在栈上形成的完整字符串：`"Hello from manual clang compile!\0"`
+
+**阶段 2：准备调用参数（指令 14-16）**
+
+```
+指令 14: r1 = r10          → r1 指向帧指针（栈顶）
+指令 15: r1 += -40         → r1 向前偏移 40 字节，指向字符串起始位置
+指令 16: r2 = 33           → r2 = 字符串长度（包括 NULL 终止符）
+```
+
+此时寄存器状态：
+- `r1`: 指向格式化字符串 `"Hello from manual clang compile!"`
+- `r2`: `33` (字符串大小)
+
+这正好对应 `bpf_trace_printk(const char *fmt, u32 fmt_size)` 的两个参数。
+
+**阶段 3：调用 helper 函数并返回（指令 17-19）**
+
+```
+指令 17: call 6            → 调用 eBPF helper #6，即 bpf_trace_printk
+指令 18: r0 = 0            → 设置返回值
+指令 19: exit              → 退出程序
+```
+
+**📊 指令统计**：
+
+| 类别 | 数量 | 说明 |
+|------|------|------|
+| 总指令数 | 20 条 | eBPF 程序通常很短 |
+| MOV 长立即数 (`18`) | 4 条 | 加载 64 位常量（字符串片段） |
+| 存栈 (`7b`, `73`) | 5 条 | 将数据写入栈 |
+| MOV 立即数 (`b7`) | 3 条 | 初始化寄存器 |
+| MOV 寄存器 (`bf`) | 1 条 | 复制帧指针 |
+| 算术运算 (`07`) | 1 条 | 调整指针偏移 |
+| CALL (`85`) | 1 条 | 调用 helper 函数 |
+| EXIT (`95`) | 1 条 | 程序退出 |
+
+**程序大小**：20 条指令 × 8 字节/指令 = **160 字节**（与 readelf 显示的 `0xa0` 完全一致！）
+
+**💡 核心发现**：通过真实的编译结果，我们看到了 eBPF 字节码的真实面貌——没有全局变量，所有数据必须在栈上构建；只能调用白名单里的 helper 函数；每条指令都有严格的语义。这正是 Verifier 要验证的内容！
 
 #### **步骤 4: 用 Python/BCC 加载已编译的 .o 文件**
 
@@ -154,7 +310,7 @@ Section Headers:
 
 创建 `load-compiled.py`:
 
-```python
+```
 from bcc import BPF
 
 # 关键: 用 src_file 加载已编译的 .o 文件
@@ -176,12 +332,13 @@ b.trace_print()
 
 *注: 严格来说, BCC 主要设计用于从源码编译。如果你希望直接加载 `.o` 文件, **bpftool** 是更好的选择:*
 
-```bash
+```
 sudo bpftool prog load hello-debug.o /sys/fs/bpf/hello-debug
 sudo bpftool prog attach pinned /sys/fs/bpf/hello-debug kprobe sys_execve
 ```
 
 **✅ 手动编译的优势:**
+
 - 不依赖 BCC 的黑盒行为。
 - 可以看到每一个编译步骤。
 - C 代码独立编辑,有语法高亮。
@@ -198,20 +355,20 @@ sudo bpftool prog attach pinned /sys/fs/bpf/hello-debug kprobe sys_execve
 
 #### **方法A: 使用环境变量**
 
-```bash
+```
 export BCC_SAVE_TEMP_FILES=1
 sudo python3 your-script.py
 ```
 
 #### **方法B: 使用更强的 debug 级别**
 
-```python
+```
 b = BPF(text=program, debug=0x1f)
 ```
 
 #### **查看中间文件:**
 
-```bash
+```
 sudo find /tmp -name "*bcc*" -type f 2>/dev/null
 ```
 
@@ -248,35 +405,108 @@ sudo apt install linux-tools-common linux-tools-generic
 sudo bpftool prog list
 ```
 
-**典型输出:**
+**实际输出（Ubuntu 22.04 真实环境）:** 以下省略了部分 cgroup_* 的输出
 
 ```
-123: kprobe  name hello  tag abc123def456  gpl
-        loaded_at 2026-05-23T18:00:00+0800  uid 0
-        xlated 64B  jited 96B  memlock 4096B
-        pids python3(4567)
+2: tracing  name hid_tail_call  tag 7cc47bbf07148bfe  gpl
+	loaded_at 2026-05-24T21:09:48+0800  uid 0
+	xlated 56B  jited 138B  memlock 4096B  map_ids 2
+	btf_id 2
+
+5: cgroup_device  tag e3dbd137be8d6168  gpl
+	loaded_at 2026-05-24T21:09:49+0800  uid 0
+	xlated 504B  jited 314B  memlock 4096B
+
+65: kprobe  name hello  tag ecfa78e68c90af07  gpl
+	loaded_at 2026-05-24T22:00:49+0800  uid 0
+	xlated 160B  jited 106B  memlock 4096B  map_ids 8
+	btf_id 89
 ```
 
-**字段解释:**
-- `123`: 程序 ID
-- `kprobe`: 程序类型(还有 tracepoint/xdp/socket_filter 等)
-- `name hello`: 函数名
-- `tag abc123...`: 程序哈希值(唯一标识)
-- `gpl`: 许可证
-- `loaded_at`: 加载时间
-- `xlated 64B`: eBPF 字节码大小
-- `jited 96B`: JIT 编译后的机器码大小
-- `memlock 4096B`: 锁定的内存大小(map 占用)
-- `pids`: 哪个进程加载的
+**💡 观察发现**：
 
-**截图占位符:**
-> 📸 在这里插入 `bpftool prog list` 输出的截图
+1. **系统预装了很多 eBPF 程序**：你可能会惊讶地发现，即使什么都没做，系统里已经跑着几十个 eBPF 程序了！这些主要来自：
+   - **Snap 容器运行时**：`s_snap_store_ub`、`s_snapd_desktop` 等（Ubuntu 使用 Snap 包管理器）
+   - **HID 设备监控**：`hid_tail_call`（人机接口设备，如键盘鼠标）
+   - **Cgroup 设备控制**：大量的 `cgroup_device` 和 `cgroup_skb`（用于容器资源隔离）
+
+2. **我们的程序在哪里**：如果你运行了 `hello-debug.o`，会看到类似 `65: kprobe name hello` 这样的条目——这就是我们的程序！
+
+---
+
+**字段详解:**
+
+| 字段 | 含义 | 示例解读 |
+|------|------|----------|
+| `65` | **程序 ID** | 内核给程序的唯一标识，后续操作都用这个 ID |
+| `kprobe` | **程序类型** | 这是一个 kprobe 程序（还有 tracepoint/xdp/cgroup_skb/socket_filter 等） |
+| `name hello` | **函数名** | C 代码中的 `int hello(...)` |
+| `tag ecfa78...` | **程序哈希** | eBPF 字节码的唯一指纹（基于指令内容计算） |
+| `gpl` | **许可证** | 必须是 GPL 兼容才能加载某些 helper 函数 |
+| `loaded_at` | **加载时间** | 程序何时被加载到内核（ISO 8601 格式） |
+| `uid 0` | **加载者 UID** | 0 表示 root 加载的，1000 表示普通用户 |
+| `xlated 160B` | **字节码大小** | eBPF 字节码占 160 字节（与我们编译的一致！） |
+| `jited 106B` | **JIT 机器码大小** | 编译后的 x86_64 原生代码大小 |
+| `memlock 4096B` | **锁定内存** | 程序占用的不可交换内存（页对齐，通常 4KB） |
+| `map_ids 8` | **关联的 Map ID** | 程序使用的 Map 的 ID 列表（如果有的话） |
+| `btf_id 89` | **BTF 信息 ID** | BPF Type Format 信息（用于调试和内省） |
+
+---
+
+**🔍 有趣的现象**：
+
+1. **为什么有些程序没有 `name`？**  
+   匿名程序通常是系统自动生成的（如 cgroup 策略），它们不需要人类可读的名字。
+
+2. **`xlated` vs `jited` 大小差异**：
+   - 我们的程序：`xlated 160B` → `jited 106B`（缩小了 34%）
+   - HID 程序：`xlated 56B` → `jited 138B`（反而变大了！）
+   
+   **为什么 JIT 后反而变大？**  
+   某些 eBPF 指令需要多条 x86 指令来模拟（特别是复杂的算术运算）。JIT 编译器会权衡优化收益，有时保持简单翻译反而更高效。
+
+3. **`map_ids` 的作用**：  
+   如果你的程序使用了 Map（如 `BPF_HASH` 或 `BPF_RINGBUF_OUTPUT`），这里会显示 Map 的 ID。可以用 `bpftool map dump id <map_id>` 查看内容。
+
+4. **`btf_id` 的意义**：  
+   BTF（BPF Type Format）是 eBPF 的调试信息格式。如果你用 `-g` 参数编译，clang 会生成 BTF 信息，方便后续 introspection（内省）。
+
+---
+
+**💡 实际练习**：
+
+在你的系统上执行以下命令，观察输出：
+
+```bash
+# 1. 列出所有程序
+sudo bpftool prog list
+
+# 2. 只看 kprobe 类型的程序
+sudo bpftool prog list type kprobe
+
+# 3. 查找我们加载的程序
+sudo bpftool prog list | grep hello
+
+# 4. 统计程序数量
+sudo bpftool prog list | wc -l
+```
+
+**实际输出**：
+
+```
+$ sudo bpftool prog list | wc -l
+65  # 我的系统上有 65 个 eBPF 程序在运行！
+```
+
+我们发现，即使是"干净"的 Ubuntu 系统，后台也跑着不少 eBPF 程序——这正是现代 Linux 内核的强大之处！
+
+---
 
 ### 2.3 查看某个程序的字节码
 
 **命令:**
 
-```bash
+```
 sudo bpftool prog dump xlated id 123
 ```
 
@@ -300,14 +530,62 @@ sudo bpftool prog dump xlated id 123
 - 有返回值(`exit`)
 - 指令数量很少(eBPF 程序通常很短)
 
-**截图占位符:**
-> 📸 在这里插入 `bpftool prog dump` 输出的截图
+**🔬 对比我们手动编译的程序**：
+
+如果用 `bpftool` 加载并运行我们的 `hello-debug.o`，然后 dump 它的字节码，会看到类似这样的输出（但会更长，因为有 20 条指令）：
+
+```
+# 假设我们的程序 ID 是 999
+sudo bpftool prog dump xlated id 999
+```
+
+```
+   0: (18) r1 = 2406448776012984163 ll    # 加载字符串片段
+   2: (7b) *(u64 *)(r10 - 16) = r1       # 存入栈
+   3: (18) r1 = 2334956296524210284 ll    # 加载字符串片段
+   ...
+  17: (85) call bpf_trace_printk#6        # 调用 helper
+  18: (b7) r0 = 0                         # 返回值
+  19: (95) exit                           # 退出
+```
+
+这与我们用 `llvm-objdump` 看到的完全一致！因为 `bpftool` 显示的是内核实际加载的字节码。
+
+**🎯 进阶技巧：查看 JIT 编译后的原生代码**
+
+```
+sudo bpftool prog dump jited id 999
+```
+
+这会显示 x86_64 的原生汇编代码（JIT 编译后的结果）。你会发现它比 eBPF 字节码更短、更高效——这就是 JIT 优化的魔力！
+
+**典型输出**：
+
+```
+   0: push %rbp
+   1: mov %rsp,%rbp
+   4: sub $0x28,%rsp
+   ...
+  95: xor %eax,%eax
+  97: leave
+  98: ret
+```
+
+**为什么 `jited` 的大小通常比 `xlated` 小？**  
+因为 JIT 编译器会做各种优化：
+- 删除冗余的寄存器操作
+- 合并多条简单指令
+- 使用更高效的原生指令
+
+这就是 eBPF 能做到低开销的关键——最终跑在 CPU 上的是高度优化的原生机器码！
+
+---
 
 ### 2.4 列出所有 map
 
 **命令:**
 
-```bash
+```
 sudo bpftool map list
 ```
 
