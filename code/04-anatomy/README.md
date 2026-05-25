@@ -6,15 +6,21 @@
 
 ## 📂 文件列表
 
-| 文件名 | 说明 | 用途 |
-|--------|------|------|
-| [hello-debug.c](./hello-debug.c) | 🔧 [独立的eBPF C源代码](./hello-debug.c) | 用于手动编译测试 |
-| [hello-debug.o](./hello-debug.o) | 📦 [编译生成的eBPF字节码](./hello-debug.o) | 编译产物（ELF格式） |
-| [build-ebpf.sh](./build-ebpf.sh) | 🛠️ [自动化编译脚本](./build-ebpf.sh) | 一键完成编译和分析 |
-| [load-compiled.py](./load-compiled.py) | 🐍 [Python加载器示例](./load-compiled.py) | 演示如何用BCC加载已编译的程序 |
-| [hello-perf-plus.c](./hello-perf-plus.c) | 🔥 [C/Python分离-C代码](./hello-perf-plus.c) | 完整示例的C部分 |
-| [hello-perf-plus.py](./hello-perf-plus.py) | 🔥 [C/Python分离-Python加载器](./hello-perf-plus.py) | 完整示例的Python部分 |
-| [COMPILE_OUTPUT.md](./COMPILE_OUTPUT.md) | 📖 **[编译过程详解](./COMPILE_OUTPUT.md)** | 详细文档，展示所有中间产物 |
+| 文件名                                     | 说明                                                 | 用途                          |
+| ------------------------------------------ | ---------------------------------------------------- | ----------------------------- |
+| [hello-debug.c](./hello-debug.c)           | 🔧 [独立的eBPF C源代码](./hello-debug.c)             | 用于手动编译测试              |
+| [hello-debug.o](./hello-debug.o)           | 📦 [编译生成的eBPF字节码](./hello-debug.o)           | 编译产物（ELF格式）           |
+| [build-ebpf.sh](./build-ebpf.sh)           | 🛠️ [自动化编译脚本](./build-ebpf.sh)                 | 一键完成编译和分析            |
+| [load-compiled.py](./load-compiled.py)     | 🐍 [Python加载器示例](./load-compiled.py)            | 演示如何用BCC加载已编译的程序 |
+| [hello-perf-plus.c](./hello-perf-plus.c)   | 🔥 [C/Python分离-C代码](./hello-perf-plus.c)         | 完整示例的C部分               |
+| [hello-perf-plus.py](./hello-perf-plus.py) | 🔥 [C/Python分离-Python加载器](./hello-perf-plus.py) | 完整示例的Python部分          |
+| [COMPILE_OUTPUT.md](./COMPILE_OUTPUT.md)   | 📖 **[编译过程详解](./COMPILE_OUTPUT.md)**           | 详细文档，展示所有中间产物    |
+
+## 与第三篇示例的关系
+
+code/03-hello-world/hello-perf-plus.py：第三篇的混合版（C 在 Python 字符串里）
+code/04-anatomy/hello-perf-plus.c + hello-perf-plus.py：本篇的分离版（C 独立文件）
+功能完全一致，但分离版更易维护，适合正式项目。
 
 ---
 
@@ -136,4 +142,4 @@ int hello(struct pt_regs *ctx) { ... }
 
 ---
 
-*最后更新: 2026-05-24*
+_最后更新: 2026-05-24_
