@@ -212,7 +212,7 @@ Section Headers:
 
 标准的 `objdump` 无法识别 eBPF 架构，我们需要使用 LLVM 提供的专用工具：
 
-```
+```BASH
 $ llvm-objdump-14 -d hello-debug.o
 ```
 
@@ -252,7 +252,7 @@ Disassembly of section kprobe/sys_execve:
 
 eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须在栈上手动构建字符串：
 
-```
+```BASH
 指令 0-2:  将 8 字节 "!elpmoc gnilpm" 加载到 r1，存入栈 [r10-16]
 指令 3-5:  将 8 字节 " clgnual" 加载到 r1，存入栈 [r10-24]
 指令 6-8:  将 8 字节 "m manua" 加载到 r1，存入栈 [r10-32]
@@ -267,7 +267,7 @@ eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须
 
 **阶段 2：准备调用参数（指令 14-16）**
 
-```
+```bASH
 指令 14: r1 = r10          → r1 指向帧指针（栈顶）
 指令 15: r1 += -40         → r1 向前偏移 40 字节，指向字符串起始位置
 指令 16: r2 = 33           → r2 = 字符串长度（包括 NULL 终止符）
@@ -281,7 +281,7 @@ eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须
 
 **阶段 3：调用 helper 函数并返回（指令 17-19）**
 
-```
+```bash
 指令 17: call 6            → 调用 eBPF helper #6，即 bpf_trace_printk
 指令 18: r0 = 0            → 设置返回值
 指令 19: exit              → 退出程序
@@ -310,7 +310,7 @@ eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须
 
 创建 `load-compiled.py`:
 
-```
+```py
 from bcc import BPF
 
 # 关键: 用 src_file 加载已编译的 .o 文件
@@ -332,7 +332,7 @@ b.trace_print()
 
 *注: 严格来说, BCC 主要设计用于从源码编译。如果你希望直接加载 `.o` 文件, **bpftool** 是更好的选择:*
 
-```
+```bash
 sudo bpftool prog load hello-debug.o /sys/fs/bpf/hello-debug
 sudo bpftool prog attach pinned /sys/fs/bpf/hello-debug kprobe sys_execve
 ```
@@ -355,20 +355,20 @@ sudo bpftool prog attach pinned /sys/fs/bpf/hello-debug kprobe sys_execve
 
 #### **方法A: 使用环境变量**
 
-```
+```bash
 export BCC_SAVE_TEMP_FILES=1
 sudo python3 your-script.py
 ```
 
 #### **方法B: 使用更强的 debug 级别**
 
-```
+```python
 b = BPF(text=program, debug=0x1f)
 ```
 
 #### **查看中间文件:**
 
-```
+```bash
 sudo find /tmp -name "*bcc*" -type f 2>/dev/null
 ```
 
@@ -407,7 +407,7 @@ sudo bpftool prog list
 
 **实际输出（Ubuntu 22.04 真实环境）:** 以下省略了部分 cgroup_* 的输出
 
-```
+```bash
 2: tracing  name hid_tail_call  tag 7cc47bbf07148bfe  gpl
 	loaded_at 2026-05-24T21:09:48+0800  uid 0
 	xlated 56B  jited 138B  memlock 4096B  map_ids 2
@@ -493,7 +493,7 @@ sudo bpftool prog list | wc -l
 
 **实际输出**：
 
-```
+```bash
 $ sudo bpftool prog list | wc -l
 65  # 我的系统上有 65 个 eBPF 程序在运行！
 ```
@@ -504,19 +504,38 @@ $ sudo bpftool prog list | wc -l
 
 ### 2.3 查看某个程序的字节码
 
-**命令:**
+**命令:** 注意，id 后跟的数字是你的 `hello` 程序真实的 ID ，上面看得到我这里是 65
 
-```
-sudo bpftool prog dump xlated id 123
+```bash
+sudo bpftool prog dump xlated id 65
 ```
 
-**典型输出:**
+**输出结果:** 注意哈，这里有注释的原因是我们前面编译的时候带上了调试信息
 
-```
-   0: (b7) r0 = 0
-   1: (85) call bpf_trace_printk#-61664
-   2: (b7) r0 = 0
-   3: (95) exit
+```bash
+chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool prog dump xlated id 65 
+int hello(struct pt_regs * ctx):
+; int hello(struct pt_regs *ctx) {
+   0: (18) r1 = 0x21656c69706d6f63
+; char fmt[] = "Hello from manual clang compile!";
+   2: (7b) *(u64 *)(r10 -16) = r1
+   3: (18) r1 = 0x20676e616c63206c
+   5: (7b) *(u64 *)(r10 -24) = r1
+   6: (18) r1 = 0x61756e616d206d6f
+   8: (7b) *(u64 *)(r10 -32) = r1
+   9: (18) r1 = 0x7266206f6c6c6548
+  11: (7b) *(u64 *)(r10 -40) = r1
+  12: (b7) r1 = 0
+  13: (73) *(u8 *)(r10 -8) = r1
+  14: (bf) r1 = r10
+; 
+  15: (07) r1 += -40
+; bpf_trace_printk(fmt, sizeof(fmt));
+  16: (b7) r2 = 33
+  17: (85) call bpf_trace_printk#-116048
+; return 0;
+  18: (b7) r0 = 0
+  19: (95) exit
 ```
 
 **说明:**
