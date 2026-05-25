@@ -11,6 +11,7 @@
 ## 🎯 项目背景
 
 本项目是 [Learning eBPF](https://binw666.github.io/learning-ebpf-translation/) 的学习笔记和代码实践，主要服务于：
+
 - 🎓 本科毕业设计：《基于 eBPF 的容器运行时逃逸检测与防护系统》
 - 💼 职业规划：云原生安全方向工程师
 - 🧪 技术预研：eBPF 在容器安全中的应用
@@ -19,14 +20,14 @@
 
 ## 📖 学习笔记目录
 
-| 章节 | 标题 | 核心内容 |
-|------|------|----------|
-| [One](./docs/One、什么是%20eBPF.md) | 什么是 eBPF | 核心概念、Verifier、JIT、Maps |
-| [Two](./docs/Two、云原生下的%20eBPF.md) | 云原生下的 eBPF | 网络管理、可观测性、安全防护 |
-| [Three](./docs/Three、eBPF%20的%20Hello%20%20World.md) | Hello World | BCC框架、kprobe、Perf/Ring Buffer |
-| [Four](./docs/Four、eBPF%20程序的解剖与工程化.md) | **程序解剖** | **手动编译、ELF段结构、C/Python分离** |
-| [简章](./docs/简章.md) | 项目背景 | 从 Pwn 手到云原生的逆旅 |
-| [项目环境](./docs/项目环境.md) | 环境配置 | Ubuntu 22.04 虚拟机配置指南 |
+| 章节                                                   | 标题            | 核心内容                              |
+| ------------------------------------------------------ | --------------- | ------------------------------------- |
+| [One](./docs/One、什么是%20eBPF.md)                    | 什么是 eBPF     | 核心概念、Verifier、JIT、Maps         |
+| [Two](./docs/Two、云原生下的%20eBPF.md)                | 云原生下的 eBPF | 网络管理、可观测性、安全防护          |
+| [Three](./docs/Three、eBPF%20的%20Hello%20%20World.md) | Hello World     | BCC框架、kprobe、Perf/Ring Buffer     |
+| [Four](./docs/Four、eBPF%20程序的解剖与工程化.md)      | **程序解剖**    | **手动编译、ELF段结构、C/Python分离** |
+| [简章](./docs/简章.md)                                 | 项目背景        | 从 Pwn 手到云原生的逆旅               |
+| [项目环境](./docs/项目环境.md)                         | 环境配置        | Ubuntu 22.04 虚拟机配置指南           |
 
 ---
 
@@ -97,3 +98,15 @@ ebpf-learning-notes/
         ├── hello-perf-plus.c      # 🔥 [C/Python分离-C代码](./code/04-anatomy/hello-perf-plus.c)
         ├── hello-perf-plus.py     # 🔥 [C/Python分离-Python加载器](./code/04-anatomy/hello-perf-plus.py)
         └── COMPILE_OUTPUT.md      # 📊 [编译输出详解](./code/04-anatomy/COMPILE_OUTPUT.md)
+
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=Chenjx12%2Febpf-learning-notes&type=date&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&legend=top-left" />
+ </picture>
+</a>
+```
