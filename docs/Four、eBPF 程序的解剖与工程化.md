@@ -538,13 +538,120 @@ int hello(struct pt_regs * ctx):
   19: (95) exit
 ```
 
-**说明:**
-- 每条指令都是 8 字节
-- `(b7)` = MOV 立即数
-- `(85)` = CALL helper 函数
-- `(95)` = EXIT 返回
+这些十六进制代码（比如 `07`, `b7`, `18`）就是 eBPF 的**操作码（Opcodes）**，你可以把它们理解为 eBPF 虚拟机的“机器语言”。
 
-**不需要逐行理解**,只要能看出:
+就像 x86 汇编里的 `mov`、`add`、`call` 一样，eBPF 也有自己的一套指令集。
+
+### 核心概念：eBPF 寄存器
+
+在看指令前，先认识 eBPF 的 11 个寄存器（`r0` - `r10`）：
+
+- `r0`：存放函数返回值（也是 eBPF 程序最终的返回值）。
+- `r1` - `r5`：存放函数调用的参数。
+- `r6` - `r9`：被调用者保存寄存器（函数执行前后值不变）。
+- `r10`：**只读的栈帧指针**（指向当前 eBPF 程序的栈顶）。
+
+### 逐行拆解：你的 Hello World 是怎么跑的
+
+我们结合你的 C 代码和 `bpftool` 输出，一句句看：
+
+#### C 代码 1：字符串定义与初始化
+
+```c
+char fmt[] = "Hello from manual clang compile!";
+```
+
+C 语言里的字符串，在机器层面就是一段连续的内存字节。因为 eBPF 指令一次最多只能操作 64 位（8 字节），所以 BCC 把 32 字节的字符串拆成了 4 块 8 字节塞进寄存器，然后存到栈上。
+
+```bash
+   0: (18) r1 = 0x21656c69706d6f63  // 加载 64 位立即数到 r1
+   2: (7b) *(u64 *)(r10 -16) = r1   // 把 r1 存到栈上 (r10 - 16 的位置)
+   3: (18) r1 = 0x20676e616c63206c
+   5: (7b) *(u64 *)(r10 -24) = r1
+   6: (18) r1 = 0x61756e616d206d6f
+   8: (7b) *(u64 *)(r10 -32) = r1
+   9: (18) r1 = 0x7266206f6c6c6548  // 这其实是字符串的开头 "Hello f"
+  11: (7b) *(u64 *)(r10 -40) = r1   // 存到栈底 (r10 - 40)
+```
+
+**操作码解释：**
+
+- **`(18)`**：**64位立即数加载**（Load 64-bit Immediate）。把一个超长的 64 位数字直接塞进寄存器。
+- **`(7b)`**：**64位内存存储**（Store 64-bit to Memory）。格式是 `*(u64 *)(地址) = 寄存器`。这里用 `r10`（栈顶）减去偏移量，就是在**栈上分配空间**保存字符串。
+
+> 💡 **彩蛋**：你可以把 `0x7266206f6c6c6548` 拿去转 ASCII 码。从右往左读（因为是小端序）：`48=H`, `65=e`, `6c=l`, `6c=l`, `6f=o`, `20=空格`, `66=f`, `72=r`。正好是 “Hello r”！这就是机器眼里的字符串。
+
+#### C 代码 2：字符串结尾的 `\0`
+
+```bash
+// C 语言字符串默认以 \0 结尾
+  12: (b7) r1 = 0               // 把 r1 清零
+  13: (73) *(u8 *)(r10 -8) = r1 // 把 0 存到栈上某个位置
+```
+
+**操作码解释：**
+
+- **`(b7)`**：**32位立即数加载**（Load 32-bit Immediate）。给寄存器赋一个比较小的值（0）时用这个，比 `(18)` 省空间。
+- **`(73)`**：**8位内存存储**（Store 8-bit to Memory）。存一个字节（`\0`）。
+
+#### C 代码 3：准备 `bpf_trace_printk` 的参数
+
+在 C 里调用函数是 `bpf_trace_printk(fmt, sizeof(fmt))`，但在底层，你必须手动把参数放到寄存器里。eBPF 的调用约定是：**参数依次放在 `r1`, `r2`, `r3`, `r4`, `r5`**。
+
+```bash
+  14: (bf) r1 = r10      // 把栈顶指针赋给 r1
+; 
+  15: (07) r1 += -40     // r1 往下挪 40 字节，指向字符串开头 "H" 的位置
+; bpf_trace_printk(fmt, sizeof(fmt));
+  16: (b7) r2 = 33       // 第二个参数：字符串长度 33
+```
+
+**操作码解释：**
+
+- **`(bf)`**：**64位寄存器拷贝**（Move 64-bit Register）。`r1 = r10`。
+- **`(07)`**：**64位立即数加法**（Add 64-bit Immediate）。给寄存器加一个数字（这里是减 40，等价于加 -40）。这一步算出了字符串在栈上的起始地址，作为 `r1`（第一个参数）。
+- **`(b7)`**：前面见过，把 33 赋给 `r2`（第二个参数）。
+
+#### C 代码 4：调用与返回
+
+```bash
+  17: (85) call bpf_trace_printk#-116048  // 调用 helper 函数
+; return 0;
+  18: (b7) r0 = 0   // 设置返回值为 0
+  19: (95) exit     // 程序结束
+```
+
+**操作码解释：**
+
+- **`(85)`**：**函数调用**（Call）。这是 eBPF 最重要的指令之一，专门用来调用内核允许的 helper 函数（如 `bpf_trace_printk`）或者进行尾调用。
+- **`(95)`**：**程序退出**（Exit）。eBPF 程序必须以 `exit` 结尾，返回值放在 `r0` 里。
+
+### 总结：eBPF 指令速查表
+
+你不需要背下来，只要有个印象就行：
+
+
+
+| 操作码   | 助记符    | 含义           | 例子                    |
+| :------- | :-------- | :------------- | :---------------------- |
+| **`b7`** | MOV32     | 加载 32 位数字 | `r1 = 0`                |
+| **`18`** | MOV64     | 加载 64 位数字 | `r1 = 0x726620...`      |
+| **`bf`** | MOV64_REG | 复制寄存器     | `r1 = r10`              |
+| **`07`** | ADD64     | 加法运算       | `r1 += -40`             |
+| **`7b`** | STX64     | 存 64 位到内存 | `*(u64*)(r10-16) = r1`  |
+| **`73`** | STX8      | 存 8 位到内存  | `*(u8*)(r10-8) = r1`    |
+| **`85`** | CALL      | 调用函数       | `call bpf_trace_printk` |
+| **`95`** | EXIT      | 退出程序       | `exit`                  |
+
+### 关键收获
+
+1. **C 代码不是魔法**：哪怕是一句简单的字符串打印，底层也要拆解成“分配栈空间 -> 一块块搬数据 -> 算地址 -> 设参数 -> 调用”的繁琐步骤。
+2. **为什么 eBPF 程序有栈限制？** 你看，光存一个 33 字节的字符串，就占了栈上 40 字节的空间（还要考虑对齐），而 eBPF 总共只有 **512 字节**的栈！所以 eBPF 代码里绝不能定义大数组或大结构体，必须用 Map。
+3. **BCC 的价值**：如果没有 `bpftool` 右边的 C 语言注释，纯看这些操作码，极其痛苦。BCC 自带调试信息，让我们能对着源码看汇编，这是学习 eBPF 内部机制的最佳方式！
+
+
+
+但是我们大部分时间，**不需要逐行理解**,只要能看出:
 - 有函数调用(`call`)
 - 有返回值(`exit`)
 - 指令数量很少(eBPF 程序通常很短)
@@ -554,18 +661,19 @@ int hello(struct pt_regs * ctx):
 如果用 `bpftool` 加载并运行我们的 `hello-debug.o`，然后 dump 它的字节码，会看到类似这样的输出（但会更长，因为有 20 条指令）：
 
 ```
-# 假设我们的程序 ID 是 999
-sudo bpftool prog dump xlated id 999
+# 假设我们的程序 ID 是 66
+sudo bpftool prog dump xlated id 66
 ```
 
-```
-   0: (18) r1 = 2406448776012984163 ll    # 加载字符串片段
-   2: (7b) *(u64 *)(r10 - 16) = r1       # 存入栈
-   3: (18) r1 = 2334956296524210284 ll    # 加载字符串片段
+```bash
+   0: (18) r1 = 2406448776012984163
+; char fmt[] = "Hello from manual clang compile!"; # 加载字符串片段
+   2: (7b) *(u64 *)(r10 - 16) = r1           # 存入栈
+   3: (18) r1 = 2334956296524210284          # 加载字符串片段
    ...
-  17: (85) call bpf_trace_printk#6        # 调用 helper
-  18: (b7) r0 = 0                         # 返回值
-  19: (95) exit                           # 退出
+  17: (85) call bpf_trace_printk#-116048     # 调用 helper
+  18: (b7) r0 = 0                            # 返回值
+  19: (95) exit                              # 退出
 ```
 
 这与我们用 `llvm-objdump` 看到的完全一致！因为 `bpftool` 显示的是内核实际加载的字节码。
@@ -573,30 +681,46 @@ sudo bpftool prog dump xlated id 999
 **🎯 进阶技巧：查看 JIT 编译后的原生代码**
 
 ```
-sudo bpftool prog dump jited id 999
+sudo bpftool prog dump jited id 65
 ```
 
-这会显示 x86_64 的原生汇编代码（JIT 编译后的结果）。你会发现它比 eBPF 字节码更短、更高效——这就是 JIT 优化的魔力！
+如果你的bpftool带有反汇编，那将会显示 x86_64 的原生汇编代码（JIT 编译后的结果）。你会发现它比 eBPF 字节码更短、更高效——这就是 JIT 优化的魔力！
 
-**典型输出**：
+那如果像我一样bpftool没有反汇编引擎，就会报错：
 
-```
-   0: push %rbp
-   1: mov %rsp,%rbp
-   4: sub $0x28,%rsp
-   ...
-  95: xor %eax,%eax
-  97: leave
-  98: ret
+```bash
+chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool prog dump jited id 65
+Error: No JIT disassembly suppor
 ```
 
-**为什么 `jited` 的大小通常比 `xlated` 小？**  
-因为 JIT 编译器会做各种优化：
-- 删除冗余的寄存器操作
-- 合并多条简单指令
-- 使用更高效的原生指令
+**实话实说，对于学习 eBPF 内部机制，看 `xlated` 已经完全足够了。**
 
-这就是 eBPF 能做到低开销的关键——最终跑在 CPU 上的是高度优化的原生机器码！
+因为 JIT 编译后的 x86_64 汇编非常底层，而且 `bpftool` 默认不带源码注释（不像 `xlated` 那样有 `; char fmt[]`），看起来极其痛苦。JIT 的核心目的是“跑得快”，而不是“让人懂”。
+
+
+
+如果你就是想看一眼原生的 x86_64 汇编长什么样，可以自己编译带反汇编支持的 `bpftool`：
+
+```bash
+# 1. 安装依赖
+sudo apt install -y binutils-dev libbfd-dev libopcodes-dev
+
+# 2. 获取内核源码（以你当前的内核版本为准，比如 5.15）
+# 如果找不到完全匹配的，用 mainline 也能编
+apt source linux
+
+# 3. 编译 bpftool
+cd linux-*/tools/bpf/bpftool/
+make clean
+make -j$(nproc)
+
+# 4. 替换系统自带的版本
+sudo cp bpftool /usr/local/sbin/bpftool
+```
+
+编译成功后，再运行 `sudo bpftool prog dump jited id 65`，你就能看到一堆纯粹的 x86_64 汇编指令了（不过真的很难读懂，因为没有 C 源码对应）。
+
+
 
 ---
 
@@ -604,32 +728,120 @@ sudo bpftool prog dump jited id 999
 
 **命令:**
 
-```
+```bash
 sudo bpftool map list
 ```
 
-**典型输出:**
+**输出结果:**
 
 ```
-456: hash  name counter_table  flags 0x0
-        key 8B  value 8B  max_entries 4096  memlock 4096B
-        pids python3(4567)
+chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool map list
+2: prog_array  name hid_jmp_table  flags 0x0
+	key 4B  value 4B  max_entries 1024  memlock 8576B
+	owner_prog_type tracing  owner jited
+3: hash  name s_snapd_desktop  flags 0x0
+	key 9B  value 1B  max_entries 1000  memlock 103680B
+4: hash  name s_snap_store_ub  flags 0x0
+	key 9B  value 1B  max_entries 1000  memlock 103680B
+5: hash  name s_firefox_firef  flags 0x0
+	key 9B  value 1B  max_entries 1000  memlock 103680B
+8: array  name .rodata.str1.1  flags 0x80
+	key 4B  value 33B  max_entries 1  memlock 424B
+	frozen
 ```
 
 **字段解释:**
-- `456`: map ID
-- `hash`: map 类型(还有 array/perf/ringbuf 等)
-- `key 8B`: 键的大小
-- `value 8B`: 值的大小
-- `max_entries`: 最大条目数
 
-**查看 map 内容:**
+先看所有 Map 都有的公共字段：
 
-```bash
-sudo bpftool map dump id 456
+| 字段                       | 含义       | 例子解析                                                     |
+| :------------------------- | :--------- | :----------------------------------------------------------- |
+| **`2:` / `8:`**            | Map ID     | 内核给这个 Map 分配的身份证号，全局唯一，和程序的 ID 一样是动态分配的。 |
+| **`prog_array` / `hash`**  | Map 类型   | 这是 Map 的“物种”。`hash` 是哈希表（键值对），`array` 是数组（按索引存取），`prog_array` 是个特殊的物种（下面细说）。 |
+| **`name xxx`**             | Map 名字   | 你在 C 代码里定义的变量名（比如 `counter_table`），或者编译器自动生成的名字。 |
+| **`flags 0x0`**            | 标志位     | `0x0` 是默认；`0x80` 表示 `BPF_F_RDONLY_PROG`（eBPF 程序只能读，不能写）。 |
+| **`key 4B` / `value 33B`** | 键值大小   | 这个 Map 里，键占几字节，值占几字节。                        |
+| **`max_entries`**          | 最大条目数 | 这个 Map 最多能装多少个键值对。哈希表满了就插不进去了。      |
+| **`memlock`**              | 锁定内存   | eBPF 的内存不会被 swap 到磁盘，这是它占用的**物理内存**大小。 |
+
+#### 重点解析：你的系统里跑着哪些 Map？
+
+##### 1. `prog_array`：尾调用的“跳板”（高能预警！）
+
+```
+2: prog_array  name hid_jmp_table  flags 0x0
+	key 4B  value 4B  max_entries 1024  memlock 8576B
+	owner_prog_type tracing  owner jited
 ```
 
-### 2.5 实验:实时监控你的程序
+这个 Map 非常特殊！它不是用来存数据的，而是用来**存 eBPF 程序的 ID**。
+
+- **作用**：这是 eBPF **尾调用** 的底层实现。程序 A 可以通过这个 Map 查找到程序 B，然后跳过去执行，而且**不返回**（复用栈帧）。
+- **`owner_prog_type tracing`**：限制只有 tracing 类型的 eBPF 程序才能放进来。
+- **`owner jited`**：限制只有经过 JIT 编译的本地机器码程序才能放进来（因为跳转必须跳到本地机器码的地址）。
+
+> 💡 **剧透**：这就是你大纲里第五篇要讲的核心内容！现在你已经在系统中看到它的真身了。
+
+##### 2. `hash`：Snap 应用的安全沙箱
+
+```
+3: hash  name s_snapd_desktop  flags 0x0
+	key 9B  value 1B  max_entries 1000  memlock 103680B
+4: hash  name s_snap_store_ub  flags 0x0
+...
+5: hash  name s_firefox_firef  flags 0x0
+...
+```
+
+这些不是你写的，是 Ubuntu 的 Snap 应用商店在背后跑的 eBPF 安全策略（AppArmor/lsm）。这也证明了：**你即使不写 eBPF，你的系统也已经在大量使用它了**。
+
+##### 3. `array` + `frozen`：隐藏的字符串彩蛋！
+
+```
+8: array  name .rodata.str1.1  flags 0x80
+	key 4B  value 33B  max_entries 1  memlock 424B
+	frozen
+```
+
+这是全场最佳！我们来破案：
+
+- **`.rodata.str1.1`**：这是编译器自动生成的名字。`.rodata` 代表 **Read-Only Data（只读数据）**。`str1.1` 说明这是字符串常量区。
+- **`value 33B`**：**为什么是 33 字节？** 还记得你刚才那条 `bpf_trace_printk` 打印的字符串吗？
+  `"Hello from manual clang compile!"`
+  数一数：32 个字符 + 1 个结尾的 `\0` = **正好 33 字节**！
+- **`frozen`**：表示这个 Map 已经被“冻结”了。内核启动后，任何 eBPF 程序都**不能修改**它里面的内容，这是严格只读的。
+
+**底层原理：**
+在早期的 eBPF 中，字符串是直接内嵌在指令里的（就像你之前看到的那一堆 `(18) r1 = 0x7266206f6c6c6548`）。
+但在现代的 BCC/libbpf 编译中，为了优化，编译器会把字符串常量单独放在一个 `.rodata` 类型的只读 Map 里，然后 eBPF 程序只需要拿着这个 Map 的指针去读字符串就行了。这样指令会更短，也更安全。
+
+
+
+### 2.4 查看 Map 内容：亲手从内核捞数据
+
+纸上得来终觉浅。我们刚才发现 ID 为 8 的 `.rodata` Map 里有个 33 字节的神秘值，
+不如直接把它 dump 出来看一眼？
+
+```bash
+sudo bpftool map dump id 8
+```
+
+得到的结果：
+
+```bash
+chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool map dump id 8
+key:
+00 00 00 00
+value:
+48 65 6c 6c 6f 20 66 72  6f 6d 20 6d 61 6e 75 61
+6c 20 63 6c 61 6e 67 20  63 6f 6d 70 69 6c 65 21
+00
+Found 1 element
+```
+
+
+
+### 2.5 预留实验:实时监控你的程序
 
 **步骤:**
 
@@ -655,8 +867,7 @@ sudo bpftool map dump id 456
    # 输出: 456: perf_event_array  name events ...
    ```
 
-**截图占位符:**
-> 📸 在这里插入双终端对比的截图
+
 
 ### 💡 关键收获
 
@@ -672,22 +883,18 @@ sudo bpftool map dump id 456
 
 **现在的写法(混合版):**
 
-```
+```python
 #!/usr/bin/python3
 from bcc import BPF
 
 program = r"""
-// 一大坨 C 代码嵌在 Python 字符串里
-// 没有语法高亮
-// 调试痛苦
-// 难以复用
 """
 
 b = BPF(text=program)
 # ... 后续逻辑
 ```
 
-**问题:**
+在第三篇中，我们所有的 C 代码都像上面的代码段一样，塞在 Python 的 `r""" ... """` 字符串里。虽然 BCC 帮我们屏蔽了编译细节，但写长了简直是一场灾难：
 - ❌ C 代码没有语法高亮
 - ❌ Python 文件越来越长
 - ❌ 无法用 clang 单独检查 C 语法
@@ -695,12 +902,13 @@ b = BPF(text=program)
 
 **分离后的写法:**
 
-```
-hello-perf-plus.c   ← 纯 eBPF C 代码(有语法高亮)
-hello-perf-plus.py  ← 只做加载和回调(简洁清晰)
+```bash
+hello-perf-plus.c  ← 纯 eBPF C 代码（VSCode/Clion 语法高亮爽飞）
+hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑）
 ```
 
 **好处:**
+
 - ✅ C 代码独立编辑,IDE 支持语法高亮
 - ✅ 可以用 `clang -target bpf` 单独编译检查
 - ✅ Python 文件更干净,专注业务逻辑
@@ -714,11 +922,13 @@ hello-perf-plus.py  ← 只做加载和回调(简洁清晰)
 
 #### **拆分步骤**
 
-**步骤 1: 提取 C 代码到独立文件**
+我们现在把第三篇最终的 `hello-perf-plus.py`（混合版）拆成两个独立的文件。
 
-创建 `hello-perf-plus.c`:
+#### 步骤 1：提取 C 代码到独立文件
 
-```
+在你的 `04-anatomy` 目录下，创建 `hello-perf-plus.c`，把我们之前写在 Python 字符串里的 C 代码原封不动搬过来：
+
+```c
 // hello-perf-plus.c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
@@ -728,53 +938,47 @@ struct data_t {
     u32 pid;
     u32 uid;
     u64 ts;
-    char comm[16];          // 调用者进程名
-    char filename[128];     // 被执行的程序路径
+    char comm[16];       // 调用者进程名
+    char filename[128];  // 被执行的程序路径
 };
 
 // 声明 perf buffer
 BPF_PERF_OUTPUT(events);
 
-// 改用 tracepoint,可以直接访问系统调用参数
+// 改用 tracepoint，可以直接访问系统调用参数
 TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
     struct data_t data = {};
 
     // 填充基本信息
     data.pid = bpf_get_current_pid_tgid() >> 32;
     data.uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
-    data.ts  = bpf_ktime_get_ns();
+    data.ts = bpf_ktime_get_ns();
     bpf_get_current_comm(&data.comm, sizeof(data.comm));
 
-    // 关键!从 tracepoint 参数中读取 filename
-    bpf_probe_read_user_str(&data.filename, sizeof(data.filename), 
-                            (void *)args->filename);
+    // 关键！从 tracepoint 参数中读取 filename
+    bpf_probe_read_user_str(&data.filename, sizeof(data.filename), (void *)args->filename);
 
     // 推送事件
     events.perf_submit(args, &data, sizeof(data));
-    
     return 0;
 }
 ```
 
-**步骤 2: Python 只负责加载**
+#### 步骤 2：重构 Python 代码，只负责加载
 
-创建新的 [hello-perf-plus.py](file://f:\test-for-mcp\ebpf-learning-notes\examples\hello-perf-plus.py):
+在同目录下创建新的 `hello-perf-plus.py`。注意看 `BPF()` 里面的参数变化：
 
-```
+```python
 #!/usr/bin/python3
 """
 eBPF Tracepoint 示例(C/Python 分离版) - 获取被执行的完整命令路径
-
 功能: 使用 tracepoint 监控 execve,显示完整命令路径
 改进: C 代码和 Python 代码分离,提升可维护性
-
-使用方法:
-    sudo python3 hello-perf-plus.py
+使用方法: sudo python3 hello-perf-plus.py
 """
-
 from bcc import BPF
 
-# 关键改动:用 src_file 替代 text
+# 🔥 关键改动：用 src_file 替代 text！
 b = BPF(src_file="hello-perf-plus.c")
 
 # 用户态回调函数
@@ -787,11 +991,11 @@ def print_event(cpu, data, size):
 # 打开 perf buffer
 b["events"].open_perf_buffer(print_event)
 
-print("通过 Tracepoint 监控 execve(C/Python 分离版),按 Ctrl-C 退出...")
+print("通过 Tracepoint 监控 execve (C/Python 分离版)，按 Ctrl-C 退出...")
 print("\n示例:")
-print("  ls        → CALLER=bash   → CMD=/usr/bin/ls")
-print("  sudo su   → CALLER=bash   → CMD=/usr/bin/sudo")
-print("            → CALLER=sudo   → CMD=/usr/bin/su\n")
+print(" ls → CALLER=bash → CMD=/usr/bin/ls")
+print(" sudo su → CALLER=bash → CMD=/usr/bin/sudo")
+print(" → CALLER=sudo → CMD=/usr/bin/su\n")
 
 # 持续轮询
 while True:
@@ -801,38 +1005,37 @@ while True:
         exit()
 ```
 
-**步骤 3: 测试运行**
+#### 步骤 3：测试运行
+
+直接运行分离后的 Python 脚本：
 
 ```bash
-cd code/04-anatomy/
 sudo python3 hello-perf-plus.py
 ```
 
-**预期输出:** (和之前完全一样)
+在另一个终端敲几个命令（比如 `ls` 或 `sudo su`），你会看到输出和之前**完全一样**：
 
-```
-PID=  4762 UID= 1000 CALLER=bash             → CMD=/usr/bin/ls
-PID=  4766 UID= 1000 CALLER=bash             → CMD=/usr/bin/sudo
-PID=  4768 UID=    0 CALLER=sudo             → CMD=/usr/bin/su
-```
+![image-20260525150646674](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260525150655571.png)
 
-**截图占位符:**
-> 📸 在这里插入运行结果的截图
+### 3.3 BPF() 的两种加载方式对比
 
-### 3.3 BPF() 的两种加载方式
+| 参数                   | 用法                 | 适合场景                             |
+| ---------------------- | -------------------- | ------------------------------------ |
+| `text=program`         | C 代码以字符串传入   | 简单示例、教学、快速原型             |
+| **`src_file="xxx.c"`** | **C 代码从文件读取** | **正式项目、代码较长、需要语法高亮** |
 
-| 参数 | 用法 | 适合场景 |
-|------|------|---------|
-| `text=program` | C 代码以字符串传入 | 简单示例、教学、快速原型 |
-| `src_file="xxx.c"` | C 代码从文件读取 | 正式项目、代码较长、需要语法高亮 |
+**两者完全等价**，`src_file` 本质上就是 BCC 帮你 `open().read()` 然后传给 `text`。但就是这简单的一步分离，让你的 C 代码获得了 IDE 的语法高亮和跳转支持，维护体验直线上升！
 
-**两者完全等价**,`src_file` 本质上就是 BCC 帮你 `open().read()` 然后传给 `text`。
+
 
 ### 💡 关键收获
 
-- C/Python 分离是**工程化的第一步**
-- `BPF(src_file=)` 和 `BPF(text=)` 完全等价
-- 从现在开始养成好习惯,后面做项目时会受益无穷
+经过前面的“解剖”，我们知道了 BCC 在背后调用了 `clang`。
+而现在的 C/Python 分离，相当于我们把 C 代码**主动**交给了编辑器和 clang。
+
+这不再仅仅是为了“好看”，而是为了**可维护**：
+当你的 eBPF C 代码达到几百行时，你不可能在一个 Python 字符串里找 Bug。
+分离是工程化的第一步，从现在开始养成好习惯，后面做项目时会受益无穷。
 
 ---
 
@@ -852,12 +1055,13 @@ PID=  4768 UID=    0 CALLER=sudo             → CMD=/usr/bin/su
 - ✅ 整理了仓库目录结构,为后续扩展打基础
 
 **核心思想:**
+
 > **不要停留在"会用 BCC",要理解背后的机制。**  
 > **不要满足于"能跑",要追求"好维护"。**
 
 ### 4.2 预告第五篇
 
-现在我们的程序都是"一整坨"——一个 `hello()` 函数干所有事。
+即使我们已经将 C 和 Python 做了分离，现在我们的程序还是"一整坨"——一个 `hello()` 函数干所有事。
 
 如果逻辑复杂了怎么办?
 
@@ -882,14 +1086,8 @@ PID=  4768 UID=    0 CALLER=sudo             → CMD=/usr/bin/su
 - [bpftool 官方文档](https://man7.org/linux/man-pages/man8/bpftool.8.html)
 - [eBPF 程序生命周期](https://ebpf.io/what-is-ebpf/#verification)
 
----
 
-## 📝 课后练习
-
-1. **基础题:** 用 `bpftool` 查看你运行的 hello-perf.py 程序,截图字节码输出
-2. **进阶题:** 把 hello-ring.py 也拆分成 `.c` + `.py` 两个文件
-3. **思考题:** 为什么 eBPF 程序有栈大小限制(512 字节)?这对编程有什么影响?
 
 ---
 
-*最后更新: 2026-05-24*
+*最后更新: 2026-05-25*
