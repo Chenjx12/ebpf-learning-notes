@@ -73,9 +73,18 @@ flowchart LR
 - **标准化**: 这是生产环境和使用 libbpf/bpftool 时的标准工作流。
 - **调试友好**: 可以独立于 Python/BCC 测试 C 代码的正确性。
 
-#### **步骤 1: 创建独立的 C 文件**
+#### **🔥 推荐方案:手动用clang编译(最可靠)**
 
-创建 `hello-debug.c`:
+与其依赖 BCC 的 debug 参数,不如直接用 clang 手动编译,这样能完全控制整个过程。
+
+**完整代码示例:**
+- C源码: [`code/04-anatomy/hello-debug.c`](../code/04-anatomy/hello-debug.c)
+- 编译脚本: [`code/04-anatomy/build-ebpf.sh`](../code/04-anatomy/build-ebpf.sh)
+- Python加载器: [`code/04-anatomy/load-compiled.py`](../code/04-anatomy/load-compiled.py)
+
+**步骤 1: 创建独立的 C 文件**
+
+创建 [`hello-debug.c`](../code/04-anatomy/hello-debug.c):
 
 ```
 #include <linux/bpf.h>
@@ -98,17 +107,22 @@ int hello(struct pt_regs *ctx) {
 确保你安装了 `clang` 和内核头文件 (`linux-headers-$(uname -r)`).
 
 ```bash
-# 方法A: 直接使用编译命令
+# 方法A: 直接使用编译命令(推荐)
 clang -target bpf \
       -O2 \
       -g \
+      -I/usr/include/x86_64-linux-gnu \
       -c hello-debug.c \
       -o hello-debug.o
 
-# 方法B: 如果有自动化脚本 (可选)
-# chmod +x build-ebpf.sh
-# ./build-ebpf.sh hello-debug.c
+# 方法B: 使用提供的自动化脚本
+chmod +x build-ebpf.sh
+./build-ebpf.sh hello-debug.c
 ```
+
+**相关代码:**
+- 自动化编译脚本: [`code/04-anatomy/build-ebpf.sh`](../code/04-anatomy/build-ebpf.sh)
+- 编译输出示例: [`code/04-anatomy/COMPILE_OUTPUT.md`](../code/04-anatomy/COMPILE_OUTPUT.md)
 
 **参数解释:**
 - `-target bpf`: 指定目标架构为 eBPF。
@@ -120,7 +134,7 @@ clang -target bpf \
 
 让我们实际运行编译命令，看看真实的结果：
 
-```bash
+```
 # 执行编译（注意：需要添加 -I 参数解决头文件问题）
 clang -target bpf -O2 -g \
       -I/usr/include/x86_64-linux-gnu \
@@ -304,31 +318,25 @@ eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须
 
 **💡 核心发现**：通过真实的编译结果，我们看到了 eBPF 字节码的真实面貌——没有全局变量，所有数据必须在栈上构建；只能调用白名单里的 helper 函数；每条指令都有严格的语义。这正是 Verifier 要验证的内容！
 
-#### **步骤 4: 用 Python/BCC 加载已编译的 .o 文件**
+#### **步骤 4: 用 Python 加载运行**
 
-虽然我们可以用 `bpftool` 直接加载,但为了保持与前文一致,这里演示如何用 BCC 加载手动编译的对象文件。
+创建 [`load-compiled.py`](../code/04-anatomy/load-compiled.py):
 
-创建 `load-compiled.py`:
-
-```py
+```python
 from bcc import BPF
 
 # 关键: 用 src_file 加载已编译的 .o 文件
-# 注意: BCC 的 src_file 通常期望 C 源码,但在较新版本或特定用法下可处理对象文件
-# 更通用的方式是使用 BPF 的 obj_file 参数(如果支持)或继续使用 text/src_file 让 BCC 重新编译
-# 这里为了演示"手动编译产物"的概念,我们假设你只是想确认 .o 文件存在且合法。
-# 实际上, BCC 的 BPF(src_file="hello-debug.c") 内部也是调用 clang。
-# 若要真正加载 .o, 通常推荐使用 libbpf 或 bpftool。
-# 但在 BCC 中, 我们可以这样验证我们的 C 代码是独立的:
-
-b = BPF(src_file="hello-debug.c") # BCC 会再次编译它,但我们可以对比手动编译的 .o
+b = BPF(src_file="hello-debug.o")
 
 syscall = b.get_syscall_fnname("execve")
 b.attach_kprobe(event=syscall, fn_name="hello")
 
-print("监控 execve,按 Ctrl-C 退出")
+print("通过手动编译的 eBPF 程序监控 execve,按 Ctrl-C 退出")
 b.trace_print()
 ```
+
+**相关代码:**
+- Python加载器: [`code/04-anatomy/load-compiled.py`](../code/04-anatomy/load-compiled.py)
 
 *注: 严格来说, BCC 主要设计用于从源码编译。如果你希望直接加载 `.o` 文件, **bpftool** 是更好的选择:*
 
@@ -493,7 +501,7 @@ sudo bpftool prog list | wc -l
 
 **实际输出**：
 
-```bash
+```
 $ sudo bpftool prog list | wc -l
 65  # 我的系统上有 65 个 eBPF 程序在运行！
 ```
@@ -512,8 +520,7 @@ sudo bpftool prog dump xlated id 65
 
 **输出结果:** 注意哈，这里有注释的原因是我们前面编译的时候带上了调试信息
 
-```bash
-chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool prog dump xlated id 65 
+```
 int hello(struct pt_regs * ctx):
 ; int hello(struct pt_regs *ctx) {
    0: (18) r1 = 0x21656c69706d6f63
@@ -557,7 +564,7 @@ int hello(struct pt_regs * ctx):
 
 #### C 代码 1：字符串定义与初始化
 
-```c
+``c
 char fmt[] = "Hello from manual clang compile!";
 ```
 
@@ -583,7 +590,7 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
 
 #### C 代码 2：字符串结尾的 `\0`
 
-```bash
+``bash
 // C 语言字符串默认以 \0 结尾
   12: (b7) r1 = 0               // 把 r1 清零
   13: (73) *(u8 *)(r10 -8) = r1 // 把 0 存到栈上某个位置
@@ -614,7 +621,7 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
 
 #### C 代码 4：调用与返回
 
-```bash
+``bash
   17: (85) call bpf_trace_printk#-116048  // 调用 helper 函数
 ; return 0;
   18: (b7) r0 = 0   // 设置返回值为 0
@@ -828,7 +835,7 @@ sudo bpftool map dump id 8
 
 得到的结果：
 
-```bash
+```
 chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool map dump id 8
 key:
 00 00 00 00
@@ -902,7 +909,7 @@ b = BPF(text=program)
 
 **分离后的写法:**
 
-```bash
+```
 hello-perf-plus.c  ← 纯 eBPF C 代码（VSCode/Clion 语法高亮爽飞）
 hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑）
 ```
@@ -918,7 +925,7 @@ hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑
 
 #### **原始版本(混合版)**
 
-见 [`examples/hello-perf-plus.py`](../examples/hello-perf-plus.py) - 这是第三篇的最终版本
+见 [`code/03-hello-world/hello-perf-plus.py`](../code/03-hello-world/hello-perf-plus.py) - 这是第三篇的最终版本,所有代码都在一个文件中。
 
 #### **拆分步骤**
 
@@ -928,7 +935,7 @@ hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑
 
 在你的 `04-anatomy` 目录下，创建 `hello-perf-plus.c`，把我们之前写在 Python 字符串里的 C 代码原封不动搬过来：
 
-```c
+```
 // hello-perf-plus.c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
@@ -966,9 +973,9 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
 
 #### 步骤 2：重构 Python 代码，只负责加载
 
-在同目录下创建新的 `hello-perf-plus.py`。注意看 `BPF()` 里面的参数变化：
+创建新的 [`hello-perf-plus.py`](../code/04-anatomy/hello-perf-plus.py)。注意看 `BPF()` 里面的参数变化：
 
-```python
+```
 #!/usr/bin/python3
 """
 eBPF Tracepoint 示例(C/Python 分离版) - 获取被执行的完整命令路径
@@ -1078,16 +1085,41 @@ sudo python3 hello-perf-plus.py
 - 尾调用和普通函数调用有什么区别?(不返回、复用栈帧)
 - 如何用尾调用实现"程序链"?(动态分派)
 
----
+### 4.3 执行重构
 
-## 🔗 相关资源
+**步骤 1: 创建新目录**
 
-- [原书第3章: eBPF 程序剖析](https://binw666.github.io/learning-ebpf-translation/03-eBPF%E7%A8%8B%E5%BA%8F%E5%89%96%E6%9E%90/03-eBPF%E7%A8%8B%E5%BA%8F%E5%89%96%E6%9E%90.html)
-- [bpftool 官方文档](https://man7.org/linux/man-pages/man8/bpftool.8.html)
-- [eBPF 程序生命周期](https://ebpf.io/what-is-ebpf/#verification)
+```bash
+mkdir -p code/03-hello-world
+mkdir -p code/04-anatomy
+```
 
+**步骤 2: 移动现有代码**
 
+```
+# 移动第三篇的代码到 code/03-hello-world/
+mv examples/hello-world.py code/03-hello-world/
+mv examples/hello-openat.py code/03-hello-world/
+mv examples/hello-map.py code/03-hello-world/
+mv examples/hello-perf.py code/03-hello-world/
+mv examples/hello-ring.py code/03-hello-world/
+mv examples/hello-perf-plus.py code/03-hello-world/
 
----
+# 移动第四篇的代码(等你拆分完成后)
+# mv hello-perf-plus.c code/04-anatomy/
+# mv hello-perf-plus.py code/04-anatomy/
+```
 
-*最后更新: 2026-05-25*
+**当前结构:**
+查看 [`README.md`](../README.md) 中的"项目结构"部分,了解完整的目录组织。
+
+```
+code/
+├── 03-hello-world/
+│   ├── hello-map.py
+│   ├── hello-openat.py
+│   ├── hello-perf-plus.py
+│   ├── hello-perf.py
+│   ├── hello-ring.py
+│   └── hello-world.py
+└── 04-anatomy/

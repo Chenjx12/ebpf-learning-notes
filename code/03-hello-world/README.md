@@ -1,17 +1,19 @@
-# eBPF 示例代码
+# eBPF 示例代码 (第三篇: Hello World)
 
 本目录包含从学习笔记中提取的可运行 eBPF 示例代码。
+
+**对应笔记**: [Three、eBPF 的 Hello World](../docs/Three、eBPF%20的%20Hello%20%20World.md)
 
 ## 📂 文件列表
 
 | 文件名 | 说明 | 难度 | 推荐顺序 |
 |--------|------|------|---------|
-| [hello-world.py](./hello-world.py) | 基础 Hello World,监控 execve | ⭐ | 1️⃣ |
-| [hello-openat.py](./hello-openat.py) | 监控 openat 系统调用 | ⭐ | 2️⃣ |
-| [hello-map.py](./hello-map.py) | 使用 Hash Map 统计 UID 执行次数 | ⭐⭐ | 3️⃣ |
-| [hello-perf.py](./hello-perf.py) | 使用 Perf Buffer 传递结构化事件 | ⭐⭐⭐ | 4️⃣ |
-| [hello-ring.py](./hello-ring.py) | 使用 Ring Buffer(推荐) | ⭐⭐⭐ | 5️⃣ |
-| [hello-perf-plus.py](./hello-perf-plus.py) | 使用 Tracepoint 获取完整命令路径 | ⭐⭐⭐⭐ | 6️⃣ |
+| [hello-world.py](./hello-world.py) | ⭐ [基础Hello World,监控execve](./hello-world.py) | ⭐ | 1️⃣ |
+| [hello-openat.py](./hello-openat.py) | ⭐ [监控openat系统调用](./hello-openat.py) | ⭐ | 2️⃣ |
+| [hello-map.py](./hello-map.py) | ⭐⭐ [使用Hash Map统计UID执行次数](./hello-map.py) | ⭐⭐ | 3️⃣ |
+| [hello-perf.py](./hello-perf.py) | ⭐⭐⭐ [使用Perf Buffer传递结构化事件](./hello-perf.py) | ⭐⭐⭐ | 4️⃣ |
+| [hello-ring.py](./hello-ring.py) | ⭐⭐⭐ [使用Ring Buffer(推荐)](./hello-ring.py) | ⭐⭐⭐ | 5️⃣ |
+| [hello-perf-plus.py](./hello-perf-plus.py) | ⭐⭐⭐⭐ [使用Tracepoint获取完整命令路径](./hello-perf-plus.py) | ⭐⭐⭐⭐ | 6️⃣ |
 
 ## 🚀 快速开始
 
@@ -189,14 +191,16 @@ kprobe 挂钩在 execve 入口时,子进程的 comm 还未被替换,仍显示为
 
 ---
 
-## 📚 相关文档
+## 📖 相关文档
 
-- [Three、eBPF 的 Hello World](../docs/Three、eBPF%20的%20Hello%20%20World.md) - 详细教程
-- [FAQ](../FAQ.md) - 常见问题解答
-- [setup.sh](../setup.sh) - 环境搭建脚本
-- [项目环境](../docs/项目环境.md) - Ubuntu环境配置指南
+- **学习笔记**: [Three、eBPF 的 Hello World](../docs/Three、eBPF%20的%20Hello%20%20World.md)
+- **常见问题**: [FAQ](../FAQ.md)
+- **环境配置**: [项目环境](../docs/项目环境.md)
+- **第四篇笔记**: [Four、eBPF 程序的解剖与工程化](../docs/Four、eBPF%20程序的解剖与工程化.md) (C/Python分离)
 
 ---
+
+*最后更新: 2026-05-24*
 
 ## 💡 学习建议
 

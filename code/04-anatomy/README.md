@@ -2,15 +2,19 @@
 
 本目录包含第四篇文章相关的实验代码，重点展示 **手动编译 eBPF 程序** 和 **查看编译中间产物** 的过程。
 
+**对应笔记**: [Four、eBPF 程序的解剖与工程化](../docs/Four、eBPF%20程序的解剖与工程化.md)
+
 ## 📂 文件列表
 
 | 文件名 | 说明 | 用途 |
 |--------|------|------|
-| [hello-debug.c](./hello-debug.c) | 独立的 eBPF C 源代码 | 用于手动编译测试 |
-| [hello-debug.o](./hello-debug.o) | 编译生成的 eBPF 字节码 | 编译产物（ELF 格式） |
-| [build-ebpf.sh](./build-ebpf.sh) | 自动化编译脚本 | 一键完成编译和分析 |
-| [load-compiled.py](./load-compiled.py) | Python 加载器示例 | 演示如何用 BCC 加载已编译的程序 |
-| [COMPILE_OUTPUT.md](./COMPILE_OUTPUT.md) | **编译过程详解** | 📖 详细文档，展示所有中间产物 |
+| [hello-debug.c](./hello-debug.c) | 🔧 [独立的eBPF C源代码](./hello-debug.c) | 用于手动编译测试 |
+| [hello-debug.o](./hello-debug.o) | 📦 [编译生成的eBPF字节码](./hello-debug.o) | 编译产物（ELF格式） |
+| [build-ebpf.sh](./build-ebpf.sh) | 🛠️ [自动化编译脚本](./build-ebpf.sh) | 一键完成编译和分析 |
+| [load-compiled.py](./load-compiled.py) | 🐍 [Python加载器示例](./load-compiled.py) | 演示如何用BCC加载已编译的程序 |
+| [hello-perf-plus.c](./hello-perf-plus.c) | 🔥 [C/Python分离-C代码](./hello-perf-plus.c) | 完整示例的C部分 |
+| [hello-perf-plus.py](./hello-perf-plus.py) | 🔥 [C/Python分离-Python加载器](./hello-perf-plus.py) | 完整示例的Python部分 |
+| [COMPILE_OUTPUT.md](./COMPILE_OUTPUT.md) | 📖 **[编译过程详解](./COMPILE_OUTPUT.md)** | 详细文档，展示所有中间产物 |
 
 ---
 
@@ -124,9 +128,11 @@ int hello(struct pt_regs *ctx) { ... }
 
 ## 📚 相关文档
 
-- [Fourth、eBPF 程序的解剖与工程化](../docs/Four、eBPF%20程序的解剖与工程化.md) - 第四篇文章
-- [COMPILE_OUTPUT.md](./COMPILE_OUTPUT.md) - 编译过程详解
-- [Third、eBPF 的 Hello World](../docs/Three、eBPF%20的%20Hello%20%20World.md) - 第三篇文章
+- **学习笔记**: [Four、eBPF 程序的解剖与工程化](../docs/Four、eBPF%20程序的解剖与工程化.md)
+- **第三篇笔记**: [Three、eBPF 的 Hello World](../docs/Three、eBPF%20的%20Hello%20%20World.md)
+- **常见问题**: [FAQ](../FAQ.md)
+- **环境配置**: [项目环境](../docs/项目环境.md)
+- **基础示例**: [code/03-hello-world](../code/03-hello-world/)
 
 ---
 

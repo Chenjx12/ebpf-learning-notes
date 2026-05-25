@@ -46,11 +46,15 @@
 git clone https://github.com/Chenjx12/ebpf-learning-notes.git
 cd ebpf-learning-notes
 
-# 2. 安装依赖 (参考 docs/项目环境.md)
+# 2. 安装依赖 (参考 [docs/项目环境.md](./docs/项目环境.md))
 sudo apt install bpfcc-tools linux-headers-$(uname -r)
 
 # 3. 运行 Hello World 示例
+# 基础版: [code/03-hello-world/hello-world.py](./code/03-hello-world/hello-world.py)
 sudo python3 code/03-hello-world/hello-world.py
+
+# 进阶版: [code/04-anatomy/hello-perf-plus.py](./code/04-anatomy/hello-perf-plus.py) (C/Python分离版)
+sudo python3 code/04-anatomy/hello-perf-plus.py
 
 # 4. 新开终端执行 ls, ps 等命令观察输出
 ```
@@ -68,26 +72,28 @@ ebpf-learning-notes/
 ├── README.md              # 项目说明文档
 ├── setup.sh               # 环境搭建脚本
 ├── FAQ.md                 # 常见问题解答
-├── docs/                  # 学习笔记
+├── docs/                  # 📚 学习笔记
 │   ├── One、什么是 eBPF.md
 │   ├── Two、云原生下的 eBPF.md
 │   ├── Three、eBPF 的 Hello World.md
 │   ├── Four、eBPF 程序的解剖与工程化.md
 │   ├── 简章.md
 │   └── 项目环境.md
-└── code/                  # 实验代码
+└── code/                  # 💻 实验代码
     ├── 03-hello-world/    # 第三篇:基础示例
-    │   ├── hello-world.py
-    │   ├── hello-openat.py
-    │   ├── hello-map.py
-    │   ├── hello-perf.py
-    │   ├── hello-ring.py
-    │   └── hello-perf-plus.py
-    └── 04-anatomy/        # 第四篇:程序解剖
-        ├── README.md
-        ├── hello-debug.c              # eBPF C 源代码
-        ├── hello-debug.o              # 编译产物（eBPF 字节码）
-        ├── build-ebpf.sh              # 自动化编译脚本
-        ├── demo-compile.sh            # 编译过程演示脚本
-        ├── load-compiled.py           # Python 加载器
-        └── COMPILE_OUTPUT.md          # 📖 编译过程详解文档
+    │   ├── hello-world.py         # ⭐ [基础Hello World](./code/03-hello-world/hello-world.py)
+    │   ├── hello-openat.py        # ⭐ [监控openat系统调用](./code/03-hello-world/hello-openat.py)
+    │   ├── hello-map.py           # ⭐⭐ [Hash Map统计UID执行次数](./code/03-hello-world/hello-map.py)
+    │   ├── hello-perf.py          # ⭐⭐⭐ [Perf Buffer传递事件](./code/03-hello-world/hello-perf.py)
+    │   ├── hello-ring.py          # ⭐⭐⭐ [Ring Buffer(推荐)](./code/03-hello-world/hello-ring.py)
+    │   └── hello-perf-plus.py     # ⭐⭐⭐⭐ [Tracepoint获取完整命令路径](./code/03-hello-world/hello-perf-plus.py)
+    └── 04-anatomy/        # 第四篇:程序解剖与工程化
+        ├── README.md              # 📖 [目录说明](./code/04-anatomy/README.md)
+        ├── hello-debug.c          # 🔧 [手动编译测试C代码](./code/04-anatomy/hello-debug.c)
+        ├── hello-debug.o          # 📦 编译产物(eBPF字节码)
+        ├── build-ebpf.sh          # 🛠️ [自动化编译脚本](./code/04-anatomy/build-ebpf.sh)
+        ├── demo-compile.sh        # 🎬 [编译过程演示](./code/04-anatomy/demo-compile.sh)
+        ├── load-compiled.py       # 🐍 [Python加载器](./code/04-anatomy/load-compiled.py)
+        ├── hello-perf-plus.c      # 🔥 [C/Python分离-C代码](./code/04-anatomy/hello-perf-plus.c)
+        ├── hello-perf-plus.py     # 🔥 [C/Python分离-Python加载器](./code/04-anatomy/hello-perf-plus.py)
+        └── COMPILE_OUTPUT.md      # 📊 [编译输出详解](./code/04-anatomy/COMPILE_OUTPUT.md)
