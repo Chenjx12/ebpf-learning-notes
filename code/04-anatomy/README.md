@@ -19,7 +19,9 @@
 ## 与第三篇示例的关系
 
 code/03-hello-world/hello-perf-plus.py：第三篇的混合版（C 在 Python 字符串里）
+
 code/04-anatomy/hello-perf-plus.c + hello-perf-plus.py：本篇的分离版（C 独立文件）
+
 功能完全一致，但分离版更易维护，适合正式项目。
 
 ---
