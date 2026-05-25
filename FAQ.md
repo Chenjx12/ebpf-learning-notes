@@ -422,6 +422,95 @@ TRACEPOINT_PROBE(syscalls, sys_enter_mount) {
 
 ---
 
+### Q16: eBPF 程序卸载不掉怎么办?
+
+**现象**: 
+
+用 `sudo bpftool prog list` 查看内核中的程序时,发现之前测试的 `hello` 程序一直挂在里面,就算退出了 Python 脚本它还在!
+
+```bash
+$ sudo bpftool prog list | grep hello
+123: kprobe  name hello  tag abc123...
+       loaded_at 2026-05-24T22:00:00+0800  uid 0
+       xlated 64B  jited 96B  memlock 4096B
+```
+
+**别慌,这不是内核泄漏了,而是 eBPF 的"引用计数"机制在起作用。**
+
+---
+
+#### **为什么卸载不掉?**
+
+eBPF 程序在内核中是**基于引用计数**管理的。只要还有东西"牵挂"着它,它就不会死。常见情况有两种:
+
+1. **后台还有进程在运行**: 
+   - 比如你运行 `sudo python3 xxx.py` 时,没有用 `Ctrl+C` 优雅退出,而是直接关了终端窗口
+   - 这时 Python 进程可能变成了孤儿进程,依然挂在内核上
+
+2. **程序被"钉"在了文件系统里**: 
+   - 如果你测试时用过 `bpftool prog load` 把程序挂载到了 `/sys/fs/bpf/`
+   - 只要这个文件在,内核就不会回收它
+
+---
+
+#### **三步清理法**
+
+##### **方法 1: 杀掉残留的 Python 进程(最常见)**
+
+```bash
+# 1. 找出所有还在跑的 bcc python 脚本
+ps -ef | grep python
+
+# 你会看到类似这样的输出:
+# root      4567  1  0 22:00 ?  00:00:00 python3 hello-perf-plus.py
+
+# 2. 无情杀手(把 4567 换成你查到的 PID)
+sudo kill -9 4567
+
+# 3. 验证是否卸载干净
+sudo bpftool prog list | grep hello
+```
+
+---
+
+##### **方法 2: 拔掉"钉子"(如果你用了 bpftool load)**
+
+```bash
+# 1. 查看有哪些程序被钉住了
+ls /sys/fs/bpf/
+
+# 2. 删除对应的文件(其实就是解除挂载)
+sudo rm /sys/fs/bpf/hello-debug
+
+# 解除挂载后,如果没有进程使用它,内核会自动回收
+```
+
+---
+
+##### **方法 3: 终极必杀技(重启大法)**
+
+如果上面两招都不管用(极少数情况),最简单粗暴的办法:
+
+```bash
+sudo reboot
+```
+
+重启后,所有没有被持久化且开机不自动挂载的 eBPF 程序都会烟消云散。
+
+---
+
+#### **💡 好习惯**
+
+**优雅退出**: 
+- 运行 BCC 脚本时,一定要用 `Ctrl+C` 退出
+- BCC 底层会捕获中断信号,帮你自动卸载程序
+
+**随手清理**: 
+- 写完代码测试后,随手敲一个 `sudo bpftool prog list | grep hello` 确认干净了再走
+- 避免影响下一次测试
+
+---
+
 ## 📚 学习资源
 
 ### Q14: 有哪些好的学习资源?
