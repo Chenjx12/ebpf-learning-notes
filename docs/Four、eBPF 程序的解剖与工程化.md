@@ -668,7 +668,8 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
 如果用 `bpftool` 加载并运行我们的 `hello-debug.o`，然后 dump 它的字节码，会看到类似这样的输出（但会更长，因为有 20 条指令）：
 
 ```
-# 假设我们的程序 ID 是 66
+假设我们的程序 ID 是 66
+
 sudo bpftool prog dump xlated id 66
 ```
 
@@ -741,7 +742,7 @@ sudo bpftool map list
 
 **输出结果:**
 
-```
+```bash
 chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool map list
 2: prog_array  name hid_jmp_table  flags 0x0
 	key 4B  value 4B  max_entries 1024  memlock 8576B
@@ -775,7 +776,7 @@ chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool map list
 
 ##### 1. `prog_array`：尾调用的“跳板”（高能预警！）
 
-```
+```bash
 2: prog_array  name hid_jmp_table  flags 0x0
 	key 4B  value 4B  max_entries 1024  memlock 8576B
 	owner_prog_type tracing  owner jited
@@ -791,7 +792,7 @@ chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool map list
 
 ##### 2. `hash`：Snap 应用的安全沙箱
 
-```
+```bash
 3: hash  name s_snapd_desktop  flags 0x0
 	key 9B  value 1B  max_entries 1000  memlock 103680B
 4: hash  name s_snap_store_ub  flags 0x0
@@ -835,7 +836,7 @@ sudo bpftool map dump id 8
 
 得到的结果：
 
-```
+```bash
 chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/04-anatomy$ sudo bpftool map dump id 8
 key:
 00 00 00 00
@@ -858,11 +859,12 @@ Found 1 element
    ```
 
 2. **终端 B:** 查找程序
+   
    ```bash
    sudo bpftool prog list | grep hello
    # 输出: 123: kprobe  name hello ...
    ```
-
+   
 3. **终端 B:** 查看字节码
    ```bash
    sudo bpftool prog dump xlated id 123
@@ -909,7 +911,7 @@ b = BPF(text=program)
 
 **分离后的写法:**
 
-```
+```bash
 hello-perf-plus.c  ← 纯 eBPF C 代码（VSCode/Clion 语法高亮爽飞）
 hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑）
 ```
@@ -935,7 +937,7 @@ hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑
 
 在你的 `04-anatomy` 目录下，创建 `hello-perf-plus.c`，把我们之前写在 Python 字符串里的 C 代码原封不动搬过来：
 
-```
+```c
 // hello-perf-plus.c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
@@ -975,7 +977,7 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
 
 创建新的 [`hello-perf-plus.py`](../code/04-anatomy/hello-perf-plus.py)。注意看 `BPF()` 里面的参数变化：
 
-```
+```python
 #!/usr/bin/python3
 """
 eBPF Tracepoint 示例(C/Python 分离版) - 获取被执行的完整命令路径
@@ -1085,41 +1087,7 @@ sudo python3 hello-perf-plus.py
 - 尾调用和普通函数调用有什么区别?(不返回、复用栈帧)
 - 如何用尾调用实现"程序链"?(动态分派)
 
-### 4.3 执行重构
 
-**步骤 1: 创建新目录**
 
-```bash
-mkdir -p code/03-hello-world
-mkdir -p code/04-anatomy
-```
 
-**步骤 2: 移动现有代码**
 
-```
-# 移动第三篇的代码到 code/03-hello-world/
-mv examples/hello-world.py code/03-hello-world/
-mv examples/hello-openat.py code/03-hello-world/
-mv examples/hello-map.py code/03-hello-world/
-mv examples/hello-perf.py code/03-hello-world/
-mv examples/hello-ring.py code/03-hello-world/
-mv examples/hello-perf-plus.py code/03-hello-world/
-
-# 移动第四篇的代码(等你拆分完成后)
-# mv hello-perf-plus.c code/04-anatomy/
-# mv hello-perf-plus.py code/04-anatomy/
-```
-
-**当前结构:**
-查看 [`README.md`](../README.md) 中的"项目结构"部分,了解完整的目录组织。
-
-```
-code/
-├── 03-hello-world/
-│   ├── hello-map.py
-│   ├── hello-openat.py
-│   ├── hello-perf-plus.py
-│   ├── hello-perf.py
-│   ├── hello-ring.py
-│   └── hello-world.py
-└── 04-anatomy/
