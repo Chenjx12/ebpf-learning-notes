@@ -1,4 +1,4 @@
-# Five、eBPF 函数调用与尾调用
+# 新五、eBPF 函数调用与尾调用
 
 date: 2026.5.25
 
@@ -44,7 +44,7 @@ date: 2026.5.25
 
 ### 1.1 最小函数调用示例
 
-基于第四篇的 `hello-perf-plus.c`，我们把"获取进程信息"提取出来：
+我们把"获取进程信息"提取成一个辅助函数：
 
 完整代码：
 - C 源码：[`code/05-tail-call/simple-func.c`](../code/05-tail-call/simple-func.c)
@@ -52,14 +52,10 @@ date: 2026.5.25
 
 ```c
 // simple-func.c — eBPF 中的函数调用实验
-// 功能：把"获取进程信息"提取为辅助函数，演示 BPF-to-BPF 调用
-// 用法：sudo python3 simple-func.py
-
-#include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
 
 struct data_t {
-    u32 pid;
+    __u32 pid;
     char comm[16];
 };
 
@@ -83,11 +79,11 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
 }
 ```
 
-Python 加载器和第四篇的一样简单：
+Python 加载器和之前一样简单：
 
 ```python
 #!/usr/bin/python3
-# simple-func.py — eBPF 函数调用实验加载器
+# simple-func.py
 from bcc import BPF
 
 b = BPF(src_file="simple-func.c")
@@ -125,7 +121,7 @@ PID=  5242 COMM=su
 PID=  5243 COMM=bash
 ```
 
-发现和第四篇的输出格式一样，但这次我们在 C 代码里**把获取 PID 和进程名的逻辑抽成了一个独立函数** `fill_proc_info()`。
+发现和之前的输出格式一样，但这次我们在 C 代码里**把获取 PID 和进程名的逻辑抽成了一个独立函数** `fill_proc_info()`。
 
 ### 1.2 ⚠️ 为什么强烈建议加 `__always_inline`？
 
@@ -145,23 +141,23 @@ llvm-objdump-14 -d simple-func.o | head -50
 **预期输出**（关键部分）：
 
 ```
-simple-func.o:	file format ELF64-BPF
+simple-func.o:file format ELF64-BPF
 
 Disassembly of section tracepoint/syscalls/sys_enter_execve:
 TRACEPOINT_PROBE(syscalls, sys_enter_execve):
-       0:	r1 = *(u32 *)(r1 + 0)
-       1:	r2 = r1
-       2:	r2 <<= 32
-       3:	r2 >>= 32
-       4:	*(u32 *)(r10 - 4) = r2
-       5:	r1 = r10 - 4
-       6:	r2 = 16
-       7:	call 3 <bpf_get_current_comm>
-       8:	r1 = r10 - 20
-       9:	r2 = 20
-      10:	call 6 <bpf_perf_event_output>
-      11:	r0 = 0
-      12:	exit
+       0:r1 = *(u32 *)(r1 + 0)
+       1:r2 = r1
+       2:r2 <<= 32
+       3:r2 >>= 32
+       4:*(u32 *)(r10 - 4) = r2
+       5:r1 = r10 - 4
+       6:r2 = 16
+       7:call 3 <bpf_get_current_comm>
+       8:r1 = r10 - 20
+       9:r2 = 20
+      10:call 6 <bpf_perf_event_output>
+      11:r0 = 0
+      12:exit
 ```
 
 **关键发现**：没有看到 `call` 指令指向 `fill_proc_info`！因为它的代码被**内联展开**到了主函数里（第 0-7 行就是 `fill_proc_info` 的逻辑）。
@@ -177,7 +173,7 @@ eBPF 的栈只有区区 512 字节！在普通 C 程序里，栈动辄 8MB，随
 ```c
 // stack_overflow.c
 // ⚠️ 本文件仅作为 Verifier 报错示例，不要用 sudo python3 加载！
-#include <uapi/linux/ptrace.h>
+#include <linux/sched.h>
 
 TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
     // 故意定义大数组，瞬间撑爆 512 字节栈
@@ -254,9 +250,6 @@ sudo bpftool prog load stack_overflow.o /sys/fs/bpf/test
 // 功能：用 prog_array Map 构建 3 级程序链：entry → handler1 → handler2
 // 用法：sudo python3 hello-tail.py
 
-#include <uapi/linux/ptrace.h>
-#include <linux/bpf.h>
-#include <bpf/bpf_helpers.h>
 #include <linux/sched.h>
 
 // ============================================================
