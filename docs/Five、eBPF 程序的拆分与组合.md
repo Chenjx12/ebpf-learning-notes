@@ -814,40 +814,11 @@ hello (table_a[0]) ──尾调用──→ stage_1 (table_b[0]) ──尾调用
 
 ---
 
-## 工程化建议：用尾调用搭建多探针架构
-
-### 架构图
-
-```text
-           主程序（提取公共信息）
-                │
-                ├─→ 尾调用[0] → execve_handler
-                │
-                ├─→ 尾调用[1] → openat_handler
-                │
-                ├─→ 尾调用[2] → connect_handler
-                │
-                └─→ 尾调用[3] → mount_handler
-```
-
-### 代码结构
-
-```text
-05-calls/
-├── common.h              # 公共结构体和工具函数
-├── main.bpf.c            # 主程序
-├── execve_handler.bpf.c  # execve 处理器
-├── openat_handler.bpf.c  # openat 处理器
-└── loader.py             # 统一加载器
-```
-
 尾调用解决了"怎么拆代码"，但带来一个新问题：**我的检测逻辑是写死在 C 代码里的，如果要新增一种逃逸检测规则，还得重新编译加载。**
 
 能不能像 Falco 那样，用 YAML 配置规则，热更新？
 
 这就涉及到**用户态规则引擎 + eBPF 探针的分离**。下篇我们先解决一个更基础的问题：**怎么知道这条 execve 来自宿主机还是容器？**
-
-
 
 ## 小结与预告
 
