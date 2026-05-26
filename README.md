@@ -26,6 +26,7 @@
 | [Two](./docs/Two、云原生下的%20eBPF.md)                | 云原生下的 eBPF | 网络管理、可观测性、安全防护          |
 | [Three](./docs/Three、eBPF%20的%20Hello%20%20World.md) | Hello World     | BCC框架、kprobe、Perf/Ring Buffer     |
 | [Four](./docs/Four、eBPF%20程序的解剖与工程化.md)      | **程序解剖**    | **手动编译、ELF段结构、C/Python分离** |
+| [Five](./docs/Five、eBPF%20程序的拆分与组合.md)        | **函数调用**    | **BPF-to-BPF、Tail Call、模块化设计** |
 | [简章](./docs/简章.md)                                 | 项目背景        | 从 Pwn 手到云原生的逆旅               |
 | [项目环境](./docs/项目环境.md)                         | 环境配置        | Ubuntu 22.04 虚拟机配置指南           |
 
@@ -56,6 +57,12 @@ sudo python3 code/03-hello-world/hello-world.py
 
 # 进阶版: [code/04-anatomy/hello-perf-plus.py](./code/04-anatomy/hello-perf-plus.py) (C/Python分离版)
 sudo python3 code/04-anatomy/hello-perf-plus.py
+
+# 函数调用示例: [code/05-call/bpf2bpf.py](./code/05-call/bpf2bpf.py) (BPF-to-BPF调用)
+sudo python3 code/05-call/bpf2bpf.py
+
+# 尾调用示例: [code/05-call/tailcall-chain.py](./code/05-call/tailcall-chain.py) (Tail Call链式调用)
+sudo python3 code/05-call/tailcall-chain.py
 
 # 4. 新开终端执行 ls, ps 等命令观察输出
 ```
@@ -98,7 +105,18 @@ ebpf-learning-notes/
         ├── hello-perf-plus.c      # 🔥 [C/Python分离-C代码](./code/04-anatomy/hello-perf-plus.c)
         ├── hello-perf-plus.py     # 🔥 [C/Python分离-Python加载器](./code/04-anatomy/hello-perf-plus.py)
         └── COMPILE_OUTPUT.md      # 📊 [编译输出详解](./code/04-anatomy/COMPILE_OUTPUT.md)
-```
+    └── 05-call/           # 第五篇:函数调用与组合
+        ├── README.md              # 📖 [目录说明](./code/05-call/README.md)
+        ├── common.h               # 🔧 [公共头文件定义](./code/05-call/common.h)
+        ├── bpf2bpf.c              # 🔥 [BPF-to-BPF函数调用示例](./code/05-call/bpf2bpf.c)
+        ├── bpf2bpf.o              # 📦 BPF-to-BPF编译产物
+        ├── hello-bpf2bpf.c        # 🔥 [完整BPF-to-BPF示例](./code/05-call/hello-bpf2bpf.c)
+        ├── hello-bpf2bpf.py       # 🐍 [BPF-to-BPF Python加载器](./code/05-call/hello-bpf2bpf.py)
+        ├── hello-tail-simple.py   # ⭐ [简单Tail Call示例](./code/05-call/hello-tail-simple.py)
+        ├── tailcall-chain.py      # 🔥 [Tail Call链式调用](./code/05-call/tailcall-chain.py)
+        ├── tailcall-multi-probe.py# 🔥 [Tail Call多探针组合](./code/05-call/tailcall-multi-probe.py)
+        ├── tailcall-policy-route.py# 🔥 [Tail Call策略路由](./code/05-call/tailcall-policy-route.py)
+        └── load.py                # 🐍 [通用加载工具](./code/05-call/load.py)
 
 ## Star History
 

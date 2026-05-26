@@ -128,7 +128,7 @@ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 >  对于简单的 “Hello World” 示例或基本的调试目的来说，一个单一的跟踪管道（trace pipe）位置是可以接受的，但也非常有限。输出格式几乎没有灵活性，并且只支持字符串输出，因此对于传递结构化信息并不是特别有用。或许最重要的是，整个（虚拟）机器上只有这样一个位置。如果同时运行多个 eBPF 程序，它们都会将跟踪输出写入同一个跟踪管道，这对操作人员来说可能会非常混乱。
 
-所以引出了获取 eBPF 程序信息更好的方法：使用 `eBPF 映射` （ eBPF Map）。
+所以引出了获取 eBPF 程序信息更好的方法：使用 `eBPF 映射` （ eBPF Map）.
 
 
 
@@ -230,7 +230,7 @@ while True:  # 1
 
 下面是我自己运行代码的结果：
 
-```text
+```
 ID 1000: 8        ← 第一次读取：UID 1000 已经调用了 8 次 execve
 ID 1000: 14       ← 第二次读取（2秒后）：已经 14 次了，说明这 2 秒内又执行了 6 个命令
 ID 1000: 14       ← 还是 14，说明这 2 秒内没有新的 execve
@@ -861,3 +861,28 @@ openat 探针看到：
 组合起来：
   bash → cat → /etc/shadow          ✅ 完整攻击链
 ```
+
+---
+
+## 🔗 相关链接与下一步
+
+**相关代码示例:**
+- [`hello-world.py`](../code/03-hello-world/hello-world.py) - 基础Hello World
+- [`hello-openat.py`](../code/03-hello-world/hello-openat.py) - 监控openat系统调用
+- [`hello-map.py`](../code/03-hello-world/hello-map.py) - Hash Map统计
+- [`hello-perf.py`](../code/03-hello-world/hello-perf.py) - Perf Buffer传递事件
+- [`hello-ring.py`](../code/03-hello-world/hello-ring.py) - Ring Buffer(推荐)
+- [`hello-perf-plus.py`](../code/03-hello-world/hello-perf-plus.py) - Tracepoint获取完整命令路径
+
+**学习笔记:**
+- **上一篇**: [Two、云原生下的 eBPF](./Two、云原生下的%20eBPF.md)
+- **下一篇**: [Four、eBPF 程序的解剖与工程化](./Four、eBPF%20程序的解剖与工程化.md) - 打开BCC黑盒,理解编译链路
+- **再下一篇**: [Five、eBPF 程序的拆分与组合](./Five、eBPF%20程序的拆分与组合.md) - BPF-to-BPF函数调用和Tail Call
+
+**常见问题:**
+- [FAQ](../FAQ.md) - 包含程序卸载清理指南
+- [项目环境](./项目环境.md) - Ubuntu环境配置
+
+---
+
+*最后更新: 2026-05-24*

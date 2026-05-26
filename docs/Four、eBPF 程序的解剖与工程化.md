@@ -939,7 +939,7 @@ hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑
 
 在你的 `04-anatomy` 目录下，创建 `hello-perf-plus.c`，把我们之前写在 Python 字符串里的 C 代码原封不动搬过来：
 
-```c
+```
 // hello-perf-plus.c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
@@ -979,7 +979,7 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
 
 创建新的 [`hello-perf-plus.py`](../code/04-anatomy/hello-perf-plus.py)。注意看 `BPF()` 里面的参数变化：
 
-```python
+```
 #!/usr/bin/python3
 """
 eBPF Tracepoint 示例(C/Python 分离版) - 获取被执行的完整命令路径
@@ -1076,12 +1076,16 @@ sudo python3 hello-perf-plus.py
 
 如果逻辑复杂了怎么办?
 
-**第五篇讲:**
+**第五篇: eBPF 程序的拆分与组合** 已经发布! 🎉
 
-- BPF-to-BPF 函数调用(代码复用)
-- 尾调用(Tail Call)(不回来的调用)
-- 原书第3章后半段 + hello-tail.py 实验
-- 为你的多探针架构打基础
+**对应笔记**: [Five、eBPF 程序的拆分与组合](./Five、eBPF%20程序的拆分与组合.md)  
+**对应代码**: [`code/05-call/`](../code/05-call/)
+
+**核心内容:**
+- ✅ **BPF-to-BPF 函数调用**(代码复用) - [`bpf2bpf.c`](../code/05-call/bpf2bpf.c)
+- ✅ **尾调用(Tail Call)**(不回来的调用) - [`tailcall-chain.py`](../code/05-call/tailcall-chain.py)
+- ✅ **多探针组合架构** - [`tailcall-multi-probe.py`](../code/05-call/tailcall-multi-probe.py)
+- ✅ **策略路由实现** - [`tailcall-policy-route.py`](../code/05-call/tailcall-policy-route.py)
 
 **核心问题:**
 
@@ -1089,7 +1093,12 @@ sudo python3 hello-perf-plus.py
 - 尾调用和普通函数调用有什么区别?(不返回、复用栈帧)
 - 如何用尾调用实现"程序链"?(动态分派)
 
+---
 
+## 🔗 相关链接
 
-
-
+- **上一篇**: [Three、eBPF 的 Hello World](./Three、eBPF%20的%20Hello%20%20World.md)
+- **下一篇**: [Five、eBPF 程序的拆分与组合](./Five、eBPF%20程序的拆分与组合.md)
+- **常见问题**: [FAQ](../FAQ.md) (包含程序卸载清理指南)
+- **第四篇代码**: [`code/04-anatomy/`](../code/04-anatomy/)
+- **第五篇代码**: [`code/05-call/`](../code/05-call/)
