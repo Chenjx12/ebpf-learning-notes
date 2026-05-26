@@ -503,179 +503,297 @@ struct data_t = 160 字节
 
 ### 完整代码：
 
-`05-calls/hello-tailcall.c`
-
-```c
-// 05-calls/hello-tailcall.c
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
-
-struct event_t {
-    u32 pid;
-    u32 uid;
-    u64 ts;
-    char comm[16];
-    char filename[128];  // execve 用
-    int syscall_type;    // 1=execve, 2=openat
-};
-
-BPF_RINGBUF_OUTPUT(events, 1 << 4);
-
-// ⚠️ 尾调用映射表：存储子程序的 fd
-BPF_PROG_ARRAY(tail_call_table, 2);
-
-// 主程序：提取公共信息后分发
-TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
-    struct event_t event = {};
-    
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    event.uid = bpf_get_current_uid_gid() >> 32;
-    event.ts = bpf_ktime_get_ns();
-    bpf_get_current_comm(&event.comm, sizeof(event.comm));
-    event.syscall_type = 1;
-    
-    // ✅ 关键：尾调用分发到处理 execve 的子程序
-    bpf_tail_call(args, &tail_call_table, 0);
-    
-    // 如果尾调用失败（子程序不存在），执行降级逻辑
-    event.filename[0] = '\0';
-    events.ringbuf_output(&event, sizeof(event), 0);
-    return 0;
-}
-
-// 子程序1：处理 execve 的特定逻辑
-SEC("tracepoint/syscalls/sys_enter_execve")
-int handle_execve(struct trace_event_raw_sys_enter *ctx) {
-    struct event_t *event = ctx->args;  // 伪代码，实际需要重新构造
-    
-    // 从 tracepoint 参数读取 filename
-    bpf_probe_read_user_str(event->filename, sizeof(event->filename), (void *)ctx->args[0]);
-    
-    events.ringbuf_output(event, sizeof(*event), 0);
-    return 0;
-}
-```
-
 **⚠️ BCC 限制提示**：BCC 不支持多程序在同一文件，所以实际实现需要拆分。
 
-### 实际可运行的 BCC 版本：
+### 简单实现代码：
 
-`05-calls/hello-tailcall.py`
+`05-calls/hello-tail-simple.py`
 
 ```python
 #!/usr/bin/python3
+"""最简单的尾调用演示 - 验证机制"""
 from bcc import BPF
+import ctypes as ct
 
-# BCC 版本：模拟尾调用的分派逻辑
 program = r"""
 #include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
 
-struct event_t {
-    u32 pid;
-    u32 uid;
-    u64 ts;
-    char comm[16];
-    char filename[128];
-    int syscall_type;
-};
-
-BPF_RINGBUF_OUTPUT(events, 1 << 4);
-
-// 尾调用映射表
+// 1. 定义尾调用映射表（大小为 2）
 BPF_PROG_ARRAY(tail_call_table, 2);
 
-// 处理 execve 的逻辑
-static __always_inline void handle_execve(struct event_t *event, void *ctx) {
-    event->syscall_type = 1;
-    bpf_probe_read_user_str(&event->filename, sizeof(event->filename), (void *)ctx);
+// 2. 子程序：被尾调用跳转的目标
+//    注意：程序类型必须和主程序一致（都是 KPROBE）
+int handle_execve(struct pt_regs *ctx) {
+    bpf_trace_printk("TC OK!\\n");
+    return 0;
 }
 
-// 处理 openat 的逻辑（预留）
-static __always_inline void handle_openat(struct event_t *event) {
-    event->syscall_type = 2;
-    event->filename[0] = '\0';
+// 3. 主程序：发起尾调用
+int hello(struct pt_regs *ctx) {
+    bpf_trace_printk("Before TC\\n");
+
+    // 🔥 关键修复：使用 BCC 的 .call() 语法，而不是手写 bpf_tail_call()
+    tail_call_table.call(ctx, 0);
+
+    // 4. 降级逻辑：只有尾调用失败（索引不存在）才会执行到这里
+    bpf_trace_printk("TC FAIL!\\n");
+    return 0;
+}
+"""
+
+# 编译 BPF 程序
+b = BPF(text=program)
+
+# 5. 先加载子程序，获取其 fd
+handle_fn = b.load_func("handle_execve", BPF.KPROBE)
+
+# 6. 将子程序 fd 填入尾调用映射表的索引 0 位置
+b["tail_call_table"][ct.c_int(0)] = ct.c_int(handle_fn.fd)
+
+# 7. 附加主程序到 execve 系统调用
+syscall = b.get_syscall_fnname("execve")
+b.attach_kprobe(event=syscall, fn_name="hello")
+
+print("Simple tail call demo, hit Ctrl-C to stop.")
+print("Open another terminal and type: ls")
+b.trace_print()
+```
+
+执行结果：
+
+![image-20260526194020679](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260526194027643.png)
+
+### 尾调用扩展A：策略路由（UID 分发）
+
+`tailcall-policy-route.py`：
+
+```python
+#!/usr/bin/python3
+"""尾调用扩展A：策略路由 - 根据UID分发"""
+from bcc import BPF
+import ctypes as ct
+
+program = r"""
+#include <uapi/linux/ptrace.h>
+
+BPF_PROG_ARRAY(tail_call_table, 3);
+
+int handle_system(struct pt_regs *ctx) {
+    bpf_trace_printk("[SYSTEM] sys user execve\n");
+    return 0;
 }
 
-TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
-    struct event_t event = {};
+int handle_root(struct pt_regs *ctx) {
+    bpf_trace_printk("[ROOT] root execve detected!\n");
+    return 0;
+}
+
+int handle_normal(struct pt_regs *ctx) {
+    bpf_trace_printk("[NORMAL] regular user execve\n");
+    return 0;
+}
+
+int hello(struct pt_regs *ctx) {
+    u32 uid = bpf_get_current_uid_gid() >> 32;
     
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    event.uid = bpf_get_current_uid_gid() >> 32;
-    event.ts = bpf_ktime_get_ns();
-    bpf_get_current_comm(&event.comm, sizeof(event.comm));
+    if (uid == 0) {
+        tail_call_table.call(ctx, 1);   // root -> 索引1
+    } else if (uid < 1000) {
+        tail_call_table.call(ctx, 0);   // 系统用户 -> 索引0
+    } else {
+        tail_call_table.call(ctx, 2);   // 普通用户 -> 索引2
+    }
     
-    // ✅ 模拟尾调用的分派逻辑
-    handle_execve(&event, (void *)args->filename);
-    
-    events.ringbuf_output(&event, sizeof(event), 0);
+    bpf_trace_printk("TC MISS uid=%d\n", uid);
     return 0;
 }
 """
 
 b = BPF(text=program)
 
-def print_event(ctx, data, size):
-    event = b["events"].event(data)
-    syscall_name = "execve" if event.syscall_type == 1 else "openat"
-    print(f"{syscall_name.upper():8s} PID={event.pid:6d} UID={event.uid:5d} "
-          f"CALLER={event.comm.decode():16s} → CMD={event.filename.decode()}")
+# 加载所有子程序并填入映射表
+# 映射表绑定：系统用户(0) / root(1) / 普通用户(2)
+for name, idx in [
+    ("handle_system", 0),
+    ("handle_root", 1),
+    ("handle_normal", 2),
+]:
+    fn = b.load_func(name, BPF.KPROBE)
+    b["tail_call_table"][ct.c_int(idx)] = ct.c_int(fn.fd)
 
-b["events"].open_ring_buffer(print_event)
-print("Tail call demo (BCC simulation), hit Ctrl-C to stop.")
+syscall = b.get_syscall_fnname("execve")
+b.attach_kprobe(event=syscall, fn_name="hello")
 
-while True:
-    try:
-        b.ring_buffer_poll()
-    except KeyboardInterrupt:
-        exit()
+print("Policy routing demo. Try: sudo ls  vs  ls")
+b.trace_print()
 ```
 
-## 实战对比实验设计
+**验证**：
 
-### 实验1：栈空间压力测试
-
-**目标**：验证 BPF-to-BPF 调用的栈限制。
-
-```c
-// 测试用代码（不要在实际项目中用）
-__attribute__((noinline))
-static int func1(int x) {
-    // 故意使用大局部变量
-    char buf[200];  // 接近 512B 的一半
-    return x + 1;
-}
-
-__attribute__((noinline))
-static int func2(int x) {
-    char buf[300];  // 再用 300B
-    return x + 2;
-}
-
-int test(struct pt_regs *ctx) {
-    // 嵌套调用：200 + 300 = 500B，接近极限
-    int val = func1(0);
-    val = func2(val);
-    return val;
-}
+```bash
+sudo python3 tailcall-policy-route.py
+# 另一个终端分别执行：
+ls          # 应看到 [NORMAL]
+sudo ls     # 应看到 [ROOT]
 ```
 
-**观察点**：
-
-- 编译时 Verifier 是否报错
-- `bpftool prog dump xlated` 查看栈帧结构
-
-### 实验2：尾调用层级测试
-
-**目标**：验证尾调用的最大层级。
+![image-20260526200454262](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260526200457350.png)
 
 
+
+### 扩展 B：多探针共享映射表
+
+ `tailcall-multi-probe.py`：
+
+```python
+#!/usr/bin/python3
+"""尾调用扩展B：多探针共享映射表（只打印 UID 1000）"""
+from bcc import BPF
+import ctypes as ct
+
+program = r"""
+#include <uapi/linux/ptrace.h>
+
+BPF_PROG_ARRAY(tail_call_table, 4);
+
+int handle_execve(struct pt_regs *ctx) {
+    u32 uid = bpf_get_current_uid_gid() >> 32;
+    if (uid != 1000) return 0;          //  只关注普通用户
+    
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("[EXECVE] pid=%d uid=%d\n", pid, uid);
+    return 0;
+}
+
+int handle_openat(struct pt_regs *ctx) {
+    u32 uid = bpf_get_current_uid_gid() >> 32;
+    if (uid != 1000) return 0;          //  过滤掉系统进程
+    
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("[OPENAT] pid=%d uid=%d\n", pid, uid);
+    return 0;
+}
+
+int hello_execve(struct pt_regs *ctx) {
+    tail_call_table.call(ctx, 0);
+    return 0;
+}
+
+int hello_openat(struct pt_regs *ctx) {
+    tail_call_table.call(ctx, 1);
+    return 0;
+}
+"""
+
+b = BPF(text=program)
+
+b["tail_call_table"][ct.c_int(0)] = ct.c_int(b.load_func("handle_execve", BPF.KPROBE).fd)
+b["tail_call_table"][ct.c_int(1)] = ct.c_int(b.load_func("handle_openat", BPF.KPROBE).fd)
+
+b.attach_kprobe(event=b.get_syscall_fnname("execve"), fn_name="hello_execve")
+b.attach_kprobe(event=b.get_syscall_fnname("openat"), fn_name="hello_openat")
+
+print("Filtered multi-probe demo (UID=1000 only). Try: ls / sudo ls / cat /etc/passwd")
+b.trace_print()
+```
+
+**验证**：
+
+```bash
+sudo python3 tailcall-multi-probe.py
+# 另一个终端：
+ls              # 触发 execve
+cat /etc/passwd # 触发 openat
+```
+
+那至于跑出来的截图我就不加了哈……哪怕在代码里做了过滤，`openat` 的调用频率也是 **洪水级别** 的，太多太多了
+
+------
+
+### 扩展 C：链式尾调用（测试层级）
+
+`tailcall-chain.py`：
+
+```python
+#!/usr/bin/python3
+"""尾调用扩展C：链式跳转"""
+from bcc import BPF
+import ctypes as ct
+
+program = r"""
+#include <uapi/linux/ptrace.h>
+
+BPF_PROG_ARRAY(table_a, 2);
+BPF_PROG_ARRAY(table_b, 2);
+
+int stage_2(struct pt_regs *ctx) {
+    bpf_trace_printk("[STAGE 2] final\n");
+    return 0;
+}
+
+int stage_1(struct pt_regs *ctx) {
+    bpf_trace_printk("[STAGE 1] jumping...\n");
+    table_b.call(ctx, 0);   // 继续跳到 stage_2
+    return 0;
+}
+
+int hello(struct pt_regs *ctx) {
+    bpf_trace_printk("[STAGE 0] start\n");
+    table_a.call(ctx, 0);   // 跳到 stage_1
+    return 0;
+}
+"""
+
+b = BPF(text=program)
+
+# 链式设置：hello -> stage_1 -> stage_2
+b["table_a"][ct.c_int(0)] = ct.c_int(b.load_func("stage_1", BPF.KPROBE).fd)
+b["table_b"][ct.c_int(0)] = ct.c_int(b.load_func("stage_2", BPF.KPROBE).fd)
+
+b.attach_kprobe(event=b.get_syscall_fnname("execve"), fn_name="hello")
+print("Chained tail call (2 levels). Try: ls")
+b.trace_print()
+```
+
+**验证**：
+
+```bash
+sudo python3 tailcall-chain.py
+# 另一个终端执行 ls，应看到：
+# [STAGE 0] start
+# [STAGE 1] jumping...
+# [STAGE 2] final
+```
+
+![image-20260526201916557](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260526201917932.png)
+
+关键验证点
+
+| 观察点             | 含义                                                       |
+| :----------------- | :--------------------------------------------------------- |
+| **PID 都是 25841** | 尾调用复用同一个进程上下文，不创建新栈帧                   |
+| **时间戳几乎相同** | `38209.081276` → `38209.081304`，跳转耗时极短              |
+| **没有 `TC MISS`** | 两张映射表都成功命中                                       |
+| **没有返回痕迹**   | 如果普通函数调用，stage_1 执行完会回到 hello，但尾调用不会 |
+
+
+
+链式流程回顾
+
+```plain
+hello (table_a[0]) ──尾调用──→ stage_1 (table_b[0]) ──尾调用──→ stage_2
+     [STAGE 0]                      [STAGE 1]                      [STAGE 2]
+```
+
+这就是**跨映射表的链式尾调用**——`table_a` 跳到 `stage_1`，`stage_1` 再用自己的 `table_b` 跳到 `stage_2`。
+
+---
 
 ## 工程化建议：用尾调用搭建多探针架构
 
 ### 架构图
 
-```
+```text
            主程序（提取公共信息）
                 │
                 ├─→ 尾调用[0] → execve_handler
@@ -689,7 +807,7 @@ int test(struct pt_regs *ctx) {
 
 ### 代码结构
 
-```
+```text
 05-calls/
 ├── common.h              # 公共结构体和工具函数
 ├── main.bpf.c            # 主程序
@@ -698,21 +816,7 @@ int test(struct pt_regs *ctx) {
 └── loader.py             # 统一加载器
 ```
 
-## 与毕设的关联点
 
-### 容器逃逸检测场景
-
-1. **多探针组合**：
-   - `execve` 捕获进程启动
-   - `openat` 捕获文件访问
-   - `ptrace` 捕获进程注入
-   - `mount` 捕获挂载操作
-2. **动态策略更新**：
-   - 用尾调用实现“热插拔”检测模块
-   - 无需重新加载主程序，只更新特定处理函数
-3. **性能优化**：
-   - 公共信息提取一次，多个处理器复用
-   - 尾调用避免栈溢出
 
 ## 小结与预告
 
