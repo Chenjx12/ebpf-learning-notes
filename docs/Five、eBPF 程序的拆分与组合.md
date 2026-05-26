@@ -1,16 +1,16 @@
 # **Five、eBPF 程序的拆分与组合**
 
-## 开篇
+date: 2026.5.26
 
-- 回顾第四篇：我们解剖了 BCC 的黑盒，学会了手动编译和 C/Python 分离
+上篇结尾，我们用 `bpftool` dump 了 `hello-perf-plus` 的字节码——**48 条指令，全挤在一个函数里**。光是清零 `struct data_t` 就用了 18 条指令，占 37.5% 的栈空间。
 
-- 引出新问题：
+我当时看着这坨代码，突然冒出一个念头：**如果我们要监控 execve、openat、connect、mount 四个系统调用，难道要把所有逻辑都复制粘贴四遍？**
 
-  单函数程序如何应对复杂逻辑？
+更可怕的是，eBPF 只有 **512 字节栈**。如果每个探针都要存一个 160 字节的 `data_t`，再嵌套几层函数调用，栈直接爆了。
 
-  - 安全检测需要多探针（execve / openat / connect）
-  - 代码复用（公共数据提取逻辑）
-  - 512字节栈限制下的函数调用问题
+所以这一篇的问题是：**怎么在 eBPF 里拆代码？**
+
+
 
 ## 核心内容结构
 
@@ -40,11 +40,28 @@
 
 ### bpf2bpf：函数调用
 
-通过 BCC，我们**永远看不到** BPF-to-BPF 的 `call` 指令。这是 BCC 的根本限制。
+我第一个想法很简单：把公共逻辑抽成函数。
+
+```c
+static void get_common_info(struct data_t *data) {
+    data->pid = bpf_get_current_pid_tgid() >> 32;
+    data->uid = bpf_get_current_uid_gid() >> 32;
+}
+```
+
+然后在主函数里调用它。编译，运行，一切正常。
+
+**但我留了个心眼**——用 `bpftool prog dump xlated` 看了一眼字节码。
+
+结果：**没有 `call` 指令**。我的 `get_common_info` 被 BCC 整个内联展开了，48 条指令一点没少。
 
 原书《Learning eBPF》第3章原文：
 
 > “At the time of this writing, the BCC framework doesn’t support BPF-to-BPF calls. Any function you define gets inlined into the main program.”
+
+**好家伙，BCC 在预处理阶段就把所有函数定义内联了，我写的"函数"只是代码组织的幻觉。**
+
+通过 BCC，我们**永远看不到** BPF-to-BPF 的 `call` 指令。这是 BCC 的根本限制。
 
 但这不意味着我们**看不了** BPF-to-BPF 调用。解决方法是：**绕过 BCC，直接用 clang 编译。**
 
@@ -497,6 +514,14 @@ struct data_t = 160 字节
 
 ## 代码案例2：尾调用（多探针动态分派）
 
+BPF-to-BPF 有去有回，需要压栈保存现场。但 eBPF 只有 512 字节栈，深度嵌套很容易爆。
+
+那如果有一种调用，**去了就不回来**，直接复用当前栈帧呢？
+
+这就是尾调用（Tail Call）——不是函数调用，而是**程序级跳转**。像 `goto` 一样，跳到另一个 eBPF 程序继续执行，不增加栈深度。
+
+内核限制最多连续 8 层尾调用，防止无限循环。
+
 ### 目标
 
 实现一个主程序 + 两个子程序的结构，用尾调用根据系统调用类型分发到不同处理逻辑。
@@ -816,6 +841,12 @@ hello (table_a[0]) ──尾调用──→ stage_1 (table_b[0]) ──尾调用
 └── loader.py             # 统一加载器
 ```
 
+尾调用解决了"怎么拆代码"，但带来一个新问题：**我的检测逻辑是写死在 C 代码里的，如果要新增一种逃逸检测规则，还得重新编译加载。**
+
+能不能像 Falco 那样，用 YAML 配置规则，热更新？
+
+这就涉及到**用户态规则引擎 + eBPF 探针的分离**。下篇我们先解决一个更基础的问题：**怎么知道这条 execve 来自宿主机还是容器？**
+
 
 
 ## 小结与预告
@@ -876,3 +907,8 @@ def setup_tail_calls(bpf_obj, program_map):
         # 更新尾调用映射表
         bpf_obj["tail_call_table"][ct.c_int(index)] = ct.c_int(prog.fd)
 ```
+
+
+
+---
+
