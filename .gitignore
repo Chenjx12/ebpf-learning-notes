@@ -25,6 +25,7 @@ dist/
 *.swp
 *.swo
 *~
+ebpf-learning-notes/.obsidian
 
 # OS
 .DS_Store
