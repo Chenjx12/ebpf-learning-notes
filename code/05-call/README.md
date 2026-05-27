@@ -55,7 +55,7 @@ b.trace_print()
 "
 ```
 
-**观察输出**:
+**观察输出**（仅示例）:
 ```
 CPU-0    [000] d...  Hello from helper function!
 CPU-0    [000] d...  Hello from main function!
@@ -79,7 +79,8 @@ sudo python3 tailcall-multi-probe.py
 sudo python3 tailcall-policy-route.py
 ```
 
-**观察输出** (以tailcall-chain.py为例):
+**观察输出**（仅示例）:
+
 ```
 CPU-0    [000] d...  Tail call chain: prog0 -> prog1 -> prog2
 CPU-0    [000] d...  Chain completed successfully!

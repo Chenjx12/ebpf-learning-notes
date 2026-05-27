@@ -74,8 +74,16 @@ sudo python3 code/05-call/bpf2bpf.py
 # 尾调用示例: [code/05-call/tailcall-chain.py](./code/05-call/tailcall-chain.py) (Tail Call链式调用)
 sudo python3 code/05-call/tailcall-chain.py
 
-# 容器感知示例: [code/06-container/container-aware.py](./code/06-container/container-aware.py) (Namespace检测)
+
+# 容器感知示例（第六篇）[code/06-container](./code/06-container) (Namespace检测)
+# 1）基础 Namespace 检测
 sudo python3 code/06-container/container-aware.py
+
+# 2）完整 Namespace ID 获取
+sudo python3 code/06-container/container-ns.py
+
+# 3）Cgroup Map + 容器名映射
+sudo python3 code/06-container/container-map.py
 
 # 4. 新开终端执行 ls, ps 等命令观察输出
 ```

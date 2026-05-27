@@ -56,7 +56,7 @@ b.trace_print()
 "
 ```
 
-**观察输出**:
+**观察输出**（仅示例）:
 ```
 CPU-0    [000] d...  PID 1234 in namespace 4026531836
 CPU-0    [000] d...  PID 1235 in namespace 4026531836
@@ -77,7 +77,8 @@ sudo python3 container-ns.py
 - ✅ 获取 `ns.inum` (Namespace Inode号)
 - ✅ 区分宿主机和容器环境
 
-**观察输出**:
+**观察输出**（仅示例）:
+
 ```
 CPU-0    [000] d...  Container process: PID=5678, NS_INUM=4026532401
 CPU-0    [000] d...  Host process: PID=9012, NS_INUM=4026531836
@@ -93,12 +94,14 @@ sudo python3 container-map.py
 ```
 
 **核心功能**:
+
 - ✅ 使用 `bpf_get_current_cgroup_id()` 获取 Cgroup Inode
 - ✅ 在用户态建立 `Cgroup ID ↔ 容器名` 映射
 - ✅ 自动识别进程所属容器
 - ✅ 支持多容器并发监控
 
-**观察输出**:
+**观察输出**（仅示例）:
+
 ```
 TIME                 CONTAINER_NAME    PID    EVENT
 2026-05-24 23:00:01  nginx-container   3456   execve

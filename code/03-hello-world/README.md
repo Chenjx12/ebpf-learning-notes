@@ -86,7 +86,8 @@ sudo python3 hello-openat.py
 sudo python3 hello-map.py
 ```
 
-**预期输出**:
+**预期输出**（仅示例）:
+
 ```
 ID 1000: 8        ← UID 1000 执行了 8 次 execve
 ID 1000: 14       ← 2秒后变成 14 次
@@ -110,7 +111,8 @@ ID 1000: 16  ID 0: 1   ← 出现 root (UID 0)
 sudo python3 hello-perf.py
 ```
 
-**预期输出**:
+**预期输出**（仅示例）:
+
 ```
 PID=  4571 UID= 1000 COMM=bash             TS=8483481047509
 PID=  4572 UID= 1000 COMM=bash             TS=8492034938577
@@ -155,7 +157,7 @@ sudo python3 hello-ring.py
 sudo python3 hello-perf-plus.py
 ```
 
-**预期输出**:
+**预期输出**（仅示例）:
 ```
 PID=  4762 UID= 1000 CALLER=bash             → CMD=/usr/bin/ls
 PID=  4766 UID= 1000 CALLER=bash             → CMD=/usr/bin/sudo
