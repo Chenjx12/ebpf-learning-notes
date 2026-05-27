@@ -42,7 +42,7 @@ date: 2026.5.26
 
 我第一个想法很简单：把公共逻辑抽成函数。
 
-```c
+``c
 static void get_common_info(struct data_t *data) {
     data->pid = bpf_get_current_pid_tgid() >> 32;
     data->uid = bpf_get_current_uid_gid() >> 32;
@@ -81,7 +81,7 @@ BCC 在把 C 代码交给 clang 之前，会做一轮预处理：**把所有函�
 
 步骤 1：创建 C 文件 `bpf2bpf.c`
 
-```c
+``c
 // bpf2bpf.c
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>

@@ -509,6 +509,76 @@ sudo reboot
 - 写完代码测试后,随手敲一个 `sudo bpftool prog list | grep hello` 确认干净了再走
 - 避免影响下一次测试
 
+
+
+
+
+没问题！直接给你这两个新增的 FAQ 条目，你直接复制粘贴到 FAQ.md 的 🔧 调试相关 章节末尾就行：
+
+### Q18: 为什么编译报错 `no member named 'pid_ns' in 'struct bpf_pidns_info'`？
+
+**现象**：
+
+在第六篇“第二把钥匙”实验中，按照部分旧版教程使用 `bpf_get_ns_current_pid_tgid()` 获取 Namespace ID 时，编译报错：
+
+```bash
+/virtual/main.c:39:26: error: no member named 'pid_ns' in 'struct bpf_pidns_info'
+        data.pid_ns = ns.pid_ns;
+                      ~~ ^
+```
+
+**原因**：
+1. **结构体没有该成员**：Linux 内核中 `struct bpf_pidns_info` 的真实定义只有 `pid` 和 `tgid` 两个成员，**根本没有 `pid_ns`**。
+2. **Helper 函数用错了**：`bpf_get_ns_current_pid_tgid()` 的真正作用是“给定一个 Namespace，查当前进程在该 Namespace 里的 PID”，而不是“获取当前进程的 Namespace ID”。用这个函数拿 Namespace ID 属于南辕北辙。
+
+**正确解法**：
+必须深入内核 `task_struct` 结构体，顺藤摸瓜读取 Namespace 的 Inode 号 (`ns.inum`)。
+
+```c
+// 在 TRACEPOINT_PROBE 中：
+struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+// 第1步：读 nsproxy 指针
+struct nsproxy *nsproxy = NULL;
+bpf_probe_read_kernel(&nsproxy, sizeof(nsproxy), &task->nsproxy);
+if (!nsproxy) goto out;
+// 第2步：读 pid_namespace 指针
+struct pid_namespace *pid_ns = NULL;
+bpf_probe_read_kernel(&pid_ns, sizeof(pid_ns), &nsproxy->pid_ns_for_children);
+if (!pid_ns) goto out;
+// 第3步：读 ns.inum (Namespace 的 Inode 号)
+unsigned int inum = 0;
+bpf_probe_read_kernel(&inum, sizeof(inum), &pid_ns->ns.inum);
+data.pid_ns_inum = inum;
+```
+
+---
+
+### Q19: 为什么编译报错 incomplete definition of type 'struct nsproxy'？
+
+**现象**： 
+
+在 eBPF C 代码中访问 `task->nsproxy->pid_ns_for_children` 时，编译报错：
+
+```bash
+/virtual/main.c:46:60: error: incomplete definition of type 'struct nsproxy'
+    bpf_probe_read_kernel(&pid_ns, sizeof(pid_ns), &nsproxy->pid_ns_for_children);
+```
+
+**原因**：
+
+这是 eBPF 开发中极常见的“不完整定义”错误。代码中包含的 `<linux/sched.h>` 只提供了 `struct nsproxy;` 的前向声明（相当于只报了户口名，没给身份证详情）。要想访问结构体内部的字段（如 `pid_ns_for_children`），必须包含定义它们的完整头文件，否则编译器不知道里面有什么。
+
+**解决方案**：
+
+在 C 代码开头补全对应的头文件即可：
+
+```bash
+#include <linux/nsproxy.h>        // 补全 nsproxy 结构体定义
+#include <linux/pid_namespace.h>  // 补全 pid_namespace 结构体定义
+```
+
+
+
 ---
 
 ## 📚 学习资源

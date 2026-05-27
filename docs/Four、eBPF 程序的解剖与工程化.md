@@ -501,7 +501,7 @@ sudo bpftool prog list | wc -l
 
 **实际输出**：
 
-```bash
+```
 $ sudo bpftool prog list | wc -l
 65  # 我的系统上有 65 个 eBPF 程序在运行！
 ```
@@ -520,7 +520,7 @@ sudo bpftool prog dump xlated id 65
 
 **输出结果:** 注意哈，这里有注释的原因是我们前面编译的时候带上了调试信息
 
-```bash
+```
 int hello(struct pt_regs * ctx):
 ; int hello(struct pt_regs *ctx) {
    0: (18) r1 = 0x21656c69706d6f63
@@ -564,7 +564,7 @@ int hello(struct pt_regs * ctx):
 
 #### C 代码 1：字符串定义与初始化
 
-```c
+```
 char fmt[] = "Hello from manual clang compile!";
 ```
 
@@ -592,7 +592,7 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
 
 #### C 代码 2：字符串结尾的 `\0`
 
-```bash
+``bash
 // C 语言字符串默认以 \0 结尾
   12: (b7) r1 = 0               // 把 r1 清零
   13: (73) *(u8 *)(r10 -8) = r1 // 把 0 存到栈上某个位置
@@ -625,7 +625,7 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
 
 #### C 代码 4：调用与返回
 
-```bash
+``bash
   17: (85) call bpf_trace_printk#-116048  // 调用 helper 函数
 ; return 0;
   18: (b7) r0 = 0   // 设置返回值为 0
@@ -913,7 +913,7 @@ b = BPF(text=program)
 
 **分离后的写法:**
 
-```bash
+```
 hello-perf-plus.c  ← 纯 eBPF C 代码（VSCode/Clion 语法高亮爽飞）
 hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑）
 ```
@@ -1099,6 +1099,8 @@ sudo python3 hello-perf-plus.py
 
 - **上一篇**: [Three、eBPF 的 Hello World](./Three、eBPF%20的%20Hello%20%20World.md)
 - **下一篇**: [Five、eBPF 程序的拆分与组合](./Five、eBPF%20程序的拆分与组合.md)
+- **再下一篇**: [Six、容器感知与身份识别：从内核到云原生](./Six、容器感知与身份识别：从内核到云原生.md) - Namespace、Cgroup、容器身份识别
 - **常见问题**: [FAQ](../FAQ.md) (包含程序卸载清理指南)
 - **第四篇代码**: [`code/04-anatomy/`](../code/04-anatomy/)
 - **第五篇代码**: [`code/05-call/`](../code/05-call/)
+- **第六篇代码**: [`code/06-container/`](../code/06-container/)

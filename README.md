@@ -27,6 +27,7 @@
 | [Three](./docs/Three、eBPF%20的%20Hello%20%20World.md) | Hello World     | BCC框架、kprobe、Perf/Ring Buffer     |
 | [Four](./docs/Four、eBPF%20程序的解剖与工程化.md)      | **程序解剖**    | **手动编译、ELF段结构、C/Python分离** |
 | [Five](./docs/Five、eBPF%20程序的拆分与组合.md)        | **函数调用**    | **BPF-to-BPF、Tail Call、模块化设计** |
+| [Six](./docs/Six、容器感知与身份识别：从内核到云原生.md)| **容器感知**    | **Namespace、Cgroup、容器身份识别**   |
 | [简章](./docs/简章.md)                                 | 项目背景        | 从 Pwn 手到云原生的逆旅               |
 | [项目环境](./docs/项目环境.md)                         | 环境配置        | Ubuntu 22.04 虚拟机配置指南           |
 
@@ -64,6 +65,9 @@ sudo python3 code/05-call/bpf2bpf.py
 # 尾调用示例: [code/05-call/tailcall-chain.py](./code/05-call/tailcall-chain.py) (Tail Call链式调用)
 sudo python3 code/05-call/tailcall-chain.py
 
+# 容器感知示例: [code/06-container/container-aware.py](./code/06-container/container-aware.py) (Namespace检测)
+sudo python3 code/06-container/container-aware.py
+
 # 4. 新开终端执行 ls, ps 等命令观察输出
 ```
 
@@ -81,12 +85,14 @@ ebpf-learning-notes/
 ├── setup.sh               # 环境搭建脚本
 ├── FAQ.md                 # 常见问题解答
 ├── docs/                  # 📚 学习笔记
-│   ├── One、什么是 eBPF.md
-│   ├── Two、云原生下的 eBPF.md
-│   ├── Three、eBPF 的 Hello World.md
-│   ├── Four、eBPF 程序的解剖与工程化.md
-│   ├── 简章.md
-│   └── 项目环境.md
+│   ├── One、什么是 eBPF.md                    ✅
+│   ├── Two、云原生下的 eBPF.md                ✅
+│   ├── Three、eBPF 的 Hello World.md          ✅
+│   ├── Four、eBPF 程序的解剖与工程化.md       ✅
+│   ├── Five、eBPF 程序的拆分与组合.md         ✅
+│   ├── Six、容器感知与身份识别：从内核到云原生.md ✅
+│   ├── 简章.md                                ✅
+│   └── 项目环境.md                            ✅
 └── code/                  # 💻 实验代码
     ├── 03-hello-world/    # 第三篇:基础示例
     │   ├── hello-world.py         # ⭐ [基础Hello World](./code/03-hello-world/hello-world.py)
@@ -106,17 +112,24 @@ ebpf-learning-notes/
         ├── hello-perf-plus.py     # 🔥 [C/Python分离-Python加载器](./code/04-anatomy/hello-perf-plus.py)
         └── COMPILE_OUTPUT.md      # 📊 [编译输出详解](./code/04-anatomy/COMPILE_OUTPUT.md)
     └── 05-call/           # 第五篇:函数调用与组合
-        ├── README.md              # 📖 [目录说明](./code/05-call/README.md)
-        ├── common.h               # 🔧 [公共头文件定义](./code/05-call/common.h)
-        ├── bpf2bpf.c              # 🔥 [BPF-to-BPF函数调用示例](./code/05-call/bpf2bpf.c)
-        ├── bpf2bpf.o              # 📦 BPF-to-BPF编译产物
-        ├── hello-bpf2bpf.c        # 🔥 [完整BPF-to-BPF示例](./code/05-call/hello-bpf2bpf.c)
-        ├── hello-bpf2bpf.py       # 🐍 [BPF-to-BPF Python加载器](./code/05-call/hello-bpf2bpf.py)
-        ├── hello-tail-simple.py   # ⭐ [简单Tail Call示例](./code/05-call/hello-tail-simple.py)
-        ├── tailcall-chain.py      # 🔥 [Tail Call链式调用](./code/05-call/tailcall-chain.py)
-        ├── tailcall-multi-probe.py# 🔥 [Tail Call多探针组合](./code/05-call/tailcall-multi-probe.py)
-        ├── tailcall-policy-route.py# 🔥 [Tail Call策略路由](./code/05-call/tailcall-policy-route.py)
-        └── load.py                # 🐍 [通用加载工具](./code/05-call/load.py)
+    │   ├── README.md              # 📖 [目录说明](./code/05-call/README.md)
+    │   ├── common.h               # 🔧 [公共头文件定义](./code/05-call/common.h)
+    │   ├── bpf2bpf.c              # 🔥 [BPF-to-BPF函数调用示例](./code/05-call/bpf2bpf.c)
+    │   ├── bpf2bpf.o              # 📦 BPF-to-BPF编译产物
+    │   ├── hello-bpf2bpf.c        # 🔥 [完整BPF-to-BPF示例](./code/05-call/hello-bpf2bpf.c)
+    │   ├── hello-bpf2bpf.py       # 🐍 [BPF-to-BPF Python加载器](./code/05-call/hello-bpf2bpf.py)
+    │   ├── hello-tail-simple.py   # ⭐ [简单Tail Call示例](./code/05-call/hello-tail-simple.py)
+    │   ├── tailcall-chain.py      # 🔥 [Tail Call链式调用](./code/05-call/tailcall-chain.py)
+    │   ├── tailcall-multi-probe.py# 🔥 [Tail Call多探针组合](./code/05-call/tailcall-multi-probe.py)
+    │   ├── tailcall-policy-route.py# 🔥 [Tail Call策略路由](./code/05-call/tailcall-policy-route.py)
+    │   └── load.py                # 🐍 [通用加载工具](./code/05-call/load.py)
+    └── 06-container/      # 第六篇:容器感知与身份识别
+        ├── container-aware.c      # 🔥 [Namespace检测C代码](./code/06-container/container-aware.c)
+        ├── container-aware.py     # 🐍 [Namespace检测Python加载器](./code/06-container/container-aware.py)
+        ├── container-ns.c         # 🔥 [完整Namespace ID获取](./code/06-container/container-ns.c)
+        ├── container-ns.py        # 🐍 [Namespace ID Python加载器](./code/06-container/container-ns.py)
+        ├── container-map.c        # 🔥 [Cgroup Map映射](./code/06-container/container-map.c)
+        └── container-map.py       # 🐍 [Cgroup Map Python加载器](./code/06-container/container-map.py)
 
 ## Star History
 
