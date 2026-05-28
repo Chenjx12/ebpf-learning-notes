@@ -397,7 +397,7 @@ int tracepoint__syscalls__sys_enter_execve(struct tracepoint__syscalls__sys_ente
 
 **你的 `struct data_t` 长这样：**
 
-```c
+``c
 struct data_t {
     u32 pid;           // 4 字节
     u32 uid;           // 4 字节

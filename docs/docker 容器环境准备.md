@@ -45,9 +45,9 @@ reboot
 docker run hello-world
 ```
 
-### 二、第六篇实验该拉取哪些容器？
+### 二、实验该拉取哪些容器？
 
-为了配合第六篇“容器身份识别”的实验，你需要准备**三种不同形态**的容器，用来验证你的 eBPF 探针在不同场景下都能正确拿到 Cgroup ID 和 Namespace。
+为了配合实验，你需要准备**三种不同形态**的容器，用来验证你的 eBPF 探针在不同场景下都能正确拿到 Cgroup ID 和 Namespace。
 
 #### 1. 基础交互型容器：`ubuntu:22.04`
 
@@ -83,7 +83,8 @@ docker run --rm alpine ls
 #### 3. 常驻服务型容器：`nginx`
 
 - **用途**：模拟真实的云原生业务容器。测试对后台守护进程及其 Worker 进程的持续监控。
-- **为什么选它**：Nginx 启动后会有 `master` 和 `worker` 两种进程，非常适合验证你 Python 映射表里 `Cgroup ID -> 容器名` 的绑定是否稳固。
+- **为什么选它**：Nginx 启动后会有 `master` 和 `worker` 两种进程，非常适合验证 Python 映射表里 `Cgroup ID -> 容器名` 的绑定是否稳固。
+- 当然……小小私心，如果 MVP 跑通了，后面想做可视化面板的话也要用到的
 
 ```bash
 docker pull nginx
@@ -97,7 +98,7 @@ ps aux | grep nginx
 
 ### 三、实验前的重要确认（避坑指南）
 
-在你的 Python 代码 `sync_container_map()` 中，我们用了 `os.stat(cgroup_path)` 来获取 Inode。**在 Ubuntu 22.04 上，这个路径必须搞对！**
+在 Python 代码 `sync_container_map()` 中，我们用了 `os.stat(cgroup_path)` 来获取 Inode。**在 Ubuntu 22.04 上，这个路径必须搞对！**
 
 确认你的系统使用的是 Cgroup v2（默认是）：
 

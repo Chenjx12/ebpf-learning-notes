@@ -30,6 +30,7 @@
 | [Four](./docs/Four、eBPF%20程序的解剖与工程化.md)        | **程序解剖**    | **手动编译、ELF段结构、C/Python分离** |
 | [Five](./docs/Five、eBPF%20程序的拆分与组合.md)          | **函数调用**    | **BPF-to-BPF、Tail Call、模块化设计** |
 | [Six](./docs/Six、容器感知与身份识别：从内核到云原生.md) | **容器感知**    | **Namespace、Cgroup、容器身份识别**   |
+| [Seven](./docs/Seven、终极合体：打造容器运行时安全监控面板.md) | **监控面板** | **多探针整合、动态映射、完整监控系统** |
 
 ### 辅助文档
 
@@ -85,6 +86,9 @@ sudo python3 code/06-container/container-ns.py
 # 3）Cgroup Map + 容器名映射
 sudo python3 code/06-container/container-map.py
 
+# 监控面板示例（第七篇）[code/07-monitor](./code/07-monitor) (完整监控系统)
+sudo python3 code/07-monitor/container-monitor.py
+
 # 4. 新开终端执行 ls, ps 等命令观察输出
 ```
 
@@ -108,6 +112,7 @@ ebpf-learning-notes/
 │   ├── Four、eBPF 程序的解剖与工程化.md       ✅
 │   ├── Five、eBPF 程序的拆分与组合.md         ✅
 │   ├── Six、容器感知与身份识别：从内核到云原生.md ✅
+│   ├── Seven、终极合体：打造容器运行时安全监控面板.md ✅
 │   ├── 简章.md                                ✅
 │   ├── 项目环境.md                            ✅
 │   ├── docker 容器环境准备.md                 ✅ Docker配置教程
@@ -143,14 +148,18 @@ ebpf-learning-notes/
     │   ├── tailcall-policy-route.py# 🔥 [Tail Call策略路由](./code/05-call/tailcall-policy-route.py)
     │   └── load.py                # 🐍 [通用加载工具](./code/05-call/load.py)
     └── 06-container/      # 第六篇:容器感知与身份识别
-        ├── container-aware.c      # 🔥 [Namespace检测C代码](./code/06-container/container-aware.c)
-        ├── container-aware.py     # 🐍 [Namespace检测Python加载器](./code/06-container/container-aware.py)
-        ├── container-ns.c         # 🔥 [完整Namespace ID获取](./code/06-container/container-ns.c)
-        ├── container-ns.py        # 🐍 [Namespace ID Python加载器](./code/06-container/container-ns.py)
-        ├── container-map.c        # 🔥 [Cgroup Map映射](./code/06-container/container-map.c)
-        └── container-map.py       # 🐍 [Cgroup Map Python加载器](./code/06-container/container-map.py)
-
-```
+    │   ├── container-aware.c      # 🔥 [Namespace检测C代码](./code/06-container/container-aware.c)
+    │   ├── container-aware.py     # 🐍 [Namespace检测Python加载器](./code/06-container/container-aware.py)
+    │   ├── container-ns.c         # 🔥 [完整Namespace ID获取](./code/06-container/container-ns.c)
+    │   ├── container-ns.py        # 🐍 [Namespace ID Python加载器](./code/06-container/container-ns.py)
+    │   ├── container-map.c        # 🔥 [Cgroup Map映射](./code/06-container/container-map.c)
+    │   └── container-map.py       # 🐍 [Cgroup Map Python加载器](./code/06-container/container-map.py)
+    └── 07-monitor/        # 第七篇:终极合体监控面板
+        ├── README.md              # 📖 [目录说明](./code/07-monitor/README.md)
+        ├── container-monitor.c    # 🔥 [完整监控面板C代码](./code/07-monitor/container-monitor.c)
+        ├── container-monitor.py   # 🐍 [完整监控面板Python加载器](./code/07-monitor/container-monitor.py)
+        ├── container-tail.c       # 🔥 [Tail Call版本监控](./code/07-monitor/container-tail.c)
+        └── container-monitor-broken-sdk.py # 🐛 [SDK问题演示](./code/07-monitor/container-monitor-broken-sdk.py)
 
 ## Star History
 

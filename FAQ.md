@@ -577,7 +577,92 @@ data.pid_ns_inum = inum;
 #include <linux/pid_namespace.h>  // 补全 pid_namespace 结构体定义
 ```
 
+---
 
+### Q20: 为什么 client.events() 收不到 Docker 事件，eBPF 映射表热更新失效？
+
+**现象**：
+
+在第七篇“动态生命线：基于 Docker Event 的映射表热更新”实验中，按照 `container-monitor.py` 的代码运行后：
+
+- 启动时能看到 `[Sync]` 全量同步信息
+- **重启容器后，`[Sync-]` / `[Sync+]` 日志完全没有出现**
+- 再次进入容器执行命令，所有进程都被错误标记为 `[HOST]`，容器身份识别失效
+
+```bash
+[Sync] test_ns -> inode 17398 (0x43f6)
+
+🛡️ 容器运行时安全监控已启动，按 Ctrl-C 停止
+============================================================
+
+[HOST] PID= 14404 UID= 0 COMM=dockerd → CMD=/usr/bin/runc
+[*] 开始监听 Docker 事件...
+...（执行 docker restart test_ns）
+...（没有任何 [Sync-] / [Sync+] 日志）
+（再次 exec 进入容器，后续所有命令都显示 [HOST]）
+```
+
+**根本原因分析**：
+
+`docker.from_env().events()` 这个 API 调用没有正常工作。可能的原因包括：
+
+1. **线程无声退出**：`listen_docker_events` 线程启动后因为异常（如连接失败、权限问题）直接退出，但主线程仍在跑 `perf_buffer_poll()`，监控事件正常输出，掩盖了 Docker 事件线程已经挂掉的事实。
+
+2. **Docker SDK 版本与 API 兼容性**：不同版本对 `status` / `Action` 字段的处理不一致，事件循环可能卡住或提前退出。
+
+3. **sudo 环境下的权限问题**：eBPF 程序需要 root，`sudo` 后某些环境变量或 Docker 连接配置可能与预期不符。
+
+4. **事件未产生**：极少数情况下 Docker 守护进程本身的事件流有问题（可通过 `sudo docker events` 验证）。
+
+**解决方案**：使用 `subprocess` + `docker events` 替代 SDK 的事件循环：
+
+```python
+import subprocess
+import json
+
+def listen_docker_events():
+    print("[*] 开始监听 Docker 事件（subprocess 模式）...")
+    proc = subprocess.Popen(
+        ['docker', 'events', '--filter', 'type=container', '--format', 'json'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True
+    )
+    for line in proc.stdout:
+        line = line.strip()
+        if not line:
+            continue
+        event = json.loads(line)
+        status = event.get('status')
+        cid = event.get('id')
+        attrs = event.get('Actor', {}).get('Attributes', {})
+        name = attrs.get('name', 'unknown')
+        if status in ('start', 'restart'):
+            container = docker.from_env().containers.get(cid)
+            add_container_to_map(container)
+        elif status in ('die', 'destroy', 'stop'):
+            del_container_by_name(name)
+```
+
+**验证方法**：替换后重新运行，重启容器时观察是否出现 `[Sync-]` 和 `[Sync+]` 日志：
+
+```bash
+[Sync-] 容器停止: test_ns -> inode 17398 (0x43f6)
+[Sync+] 容器启动: test_ns -> inode 17714 (0x4532)
+```
+
+**为什么这么做有效？**
+
+- `docker events` CLI 是 Docker 官方提供的最稳定的事件流接口，不依赖 Python SDK 的封装层
+- 通过 `subprocess` 读取实时输出，生命周期更容易控制
+- `--format json` 保证输出是标准 JSON，解析可靠
+
+**相关文件**：`07-monitor/container-monitor-broken-sdk.py` 提供了这个问题的完整复现代码，`07-monitor/container-monitor.py` 是修复后的最终版本。
+
+**参考资源**：
+
+- [Docker Events Explained: Your Window into Container Activity](https://awstip.com/docker-events-explained-your-window-into-container-activity-70604844ac15)
+- [docker events 不提供消息队列式的持久订阅](https://www.php.cn/faq/1234567.html)（需注意守护进程重启后事件会丢失）
 
 ---
 
