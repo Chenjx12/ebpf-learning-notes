@@ -10,8 +10,6 @@ date: 2026.5.26
 
 所以这一篇的问题是：**怎么在 eBPF 里拆代码？**
 
-
-
 ## 核心内容结构
 
 ```bash
@@ -24,17 +22,15 @@ date: 2026.5.26
 
 ## 核心知识点对比表
 
-
-
 | 维度         | BPF-to-BPF 调用             | 尾调用                           |
 | ------------ | --------------------------- | -------------------------------- |
 | **本质**     | 函数级调用                  | 程序级跳转                       |
-| **是否返回** | ✅ 会返回到调用点            | ❌ 不返回，复用栈帧               |
+| **是否返回** | ✅ 会返回到调用点           | ❌ 不返回，复用栈帧              |
 | **栈空间**   | 需要保存现场（压栈）        | 复用当前栈帧（不压栈）           |
 | **调用层级** | 受 512B 栈限制，层级有限    | 最多 8 层（内核限制）            |
 | **实现方式** | `__attribute__((noinline))` | `bpf_tail_call(ctx, map, index)` |
 | **适用场景** | 抽取公共逻辑（工具函数）    | 程序分派、策略路由               |
-| **BCC 支持** | 有限（内联处理）            | ✅ 完整支持                       |
+| **BCC 支持** | 有限（内联处理）            | ✅ 完整支持                      |
 
 ## 代码比对案例1：BPF-to-BPF 调用（工具函数抽离）
 
@@ -42,7 +38,7 @@ date: 2026.5.26
 
 我第一个想法很简单：把公共逻辑抽成函数。
 
-``c
+```c
 static void get_common_info(struct data_t *data) {
     data->pid = bpf_get_current_pid_tgid() >> 32;
     data->uid = bpf_get_current_uid_gid() >> 32;
@@ -81,7 +77,7 @@ BCC 在把 C 代码交给 clang 之前，会做一轮预处理：**把所有函�
 
 步骤 1：创建 C 文件 `bpf2bpf.c`
 
-``c
+```c
 // bpf2bpf.c
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
@@ -183,8 +179,6 @@ Disassembly of section kprobe/sys_execve:
 
 **指令 11 是关键连接点**：`r3 = r0`，把 `get_pid()` 的返回值从 `r0` 拷贝到 `r3`，作为 `bpf_trace_printk` 的第三个参数（对应格式字符串里的 `%d`）。
 
-
-
 ### 内联代码：修改上一篇的hello-perf-plus
 
 `05-calls/hello-bpf2bpf.c`
@@ -214,11 +208,11 @@ static __always_inline void get_common_info(struct data_t *data) {
 
 TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
     struct data_t data = {};
-    
+
     get_common_info(&data);
-    
+
     bpf_probe_read_user_str(&data.filename, sizeof(data.filename), (void *)args->filename);
-    
+
     events.perf_submit(args, &data, sizeof(data));
     return 0;
 }
@@ -334,7 +328,7 @@ int tracepoint__syscalls__sys_enter_execve(struct tracepoint__syscalls__sys_ente
 ; bpf_perf_event_output(args, bpf_pseudo_fd(1, -1), CUR_CPU_IDENTIFIER, &data, sizeof(data));
   37: (18) r2 = map[id:13]
   39: (bf) r4 = r10
-; 
+;
   40: (07) r4 += -160
 ; bpf_perf_event_output(args, bpf_pseudo_fd(1, -1), CUR_CPU_IDENTIFIER, &data, sizeof(data));
   41: (bf) r1 = r6
@@ -345,8 +339,6 @@ int tracepoint__syscalls__sys_enter_execve(struct tracepoint__syscalls__sys_ente
   46: (b7) r0 = 0
   47: (95) exit
 ```
-
-
 
 这就是用 C/Python 分离后写的那个 `TRACEPOINT_PROBE(syscalls, sys_enter_execve)` 程序——**一整坨 48 条指令，全在一个函数里，没有任何函数调用**。
 
@@ -397,7 +389,7 @@ int tracepoint__syscalls__sys_enter_execve(struct tracepoint__syscalls__sys_ente
 
 **你的 `struct data_t` 长这样：**
 
-``c
+```c
 struct data_t {
     u32 pid;           // 4 字节
     u32 uid;           // 4 字节
@@ -510,8 +502,6 @@ struct data_t = 160 字节
 
 18 条指令只为了清零！如果能用 `__builtin_memset` 或其他优化，可以大幅减少。
 
-
-
 ## 代码案例2：尾调用（多探针动态分派）
 
 BPF-to-BPF 有去有回，需要压栈保存现场。但 eBPF 只有 512 字节栈，深度嵌套很容易爆。
@@ -620,7 +610,7 @@ int handle_normal(struct pt_regs *ctx) {
 
 int hello(struct pt_regs *ctx) {
     u32 uid = bpf_get_current_uid_gid() >> 32;
-    
+
     if (uid == 0) {
         tail_call_table.call(ctx, 1);   // root -> 索引1
     } else if (uid < 1000) {
@@ -628,7 +618,7 @@ int hello(struct pt_regs *ctx) {
     } else {
         tail_call_table.call(ctx, 2);   // 普通用户 -> 索引2
     }
-    
+
     bpf_trace_printk("TC MISS uid=%d\n", uid);
     return 0;
 }
@@ -664,11 +654,9 @@ sudo ls     # 应看到 [ROOT]
 
 ![image-20260526200454262](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260526200457350.png)
 
-
-
 ### 扩展 B：多探针共享映射表
 
- `tailcall-multi-probe.py`：
+`tailcall-multi-probe.py`：
 
 ```python
 #!/usr/bin/python3
@@ -684,7 +672,7 @@ BPF_PROG_ARRAY(tail_call_table, 4);
 int handle_execve(struct pt_regs *ctx) {
     u32 uid = bpf_get_current_uid_gid() >> 32;
     if (uid != 1000) return 0;          //  只关注普通用户
-    
+
     u32 pid = bpf_get_current_pid_tgid() >> 32;
     bpf_trace_printk("[EXECVE] pid=%d uid=%d\n", pid, uid);
     return 0;
@@ -693,7 +681,7 @@ int handle_execve(struct pt_regs *ctx) {
 int handle_openat(struct pt_regs *ctx) {
     u32 uid = bpf_get_current_uid_gid() >> 32;
     if (uid != 1000) return 0;          //  过滤掉系统进程
-    
+
     u32 pid = bpf_get_current_pid_tgid() >> 32;
     bpf_trace_printk("[OPENAT] pid=%d uid=%d\n", pid, uid);
     return 0;
@@ -733,7 +721,7 @@ cat /etc/passwd # 触发 openat
 
 那至于跑出来的截图我就不加了哈……哪怕在代码里做了过滤，`openat` 的调用频率也是 **洪水级别** 的，太多太多了
 
-------
+---
 
 ### 扩展 C：链式尾调用（测试层级）
 
@@ -800,8 +788,6 @@ sudo python3 tailcall-chain.py
 | **时间戳几乎相同** | `38209.081276` → `38209.081304`，跳转耗时极短              |
 | **没有 `TC MISS`** | 两张映射表都成功命中                                       |
 | **没有返回痕迹**   | 如果普通函数调用，stage_1 执行完会回到 hello，但尾调用不会 |
-
-
 
 链式流程回顾
 
@@ -879,7 +865,4 @@ def setup_tail_calls(bpf_obj, program_map):
         bpf_obj["tail_call_table"][ct.c_int(index)] = ct.c_int(prog.fd)
 ```
 
-
-
 ---
-

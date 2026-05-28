@@ -80,7 +80,7 @@ struct data_t {
     u64 cgroup_id;
     char container_name[64];
     enum event_type type;
-    
+
     // 联合体节省内存，每次只传一种数据
     union {
         char filename[128];     // for execve & openat
@@ -134,10 +134,10 @@ int handle_execve(struct pt_regs *ctx) {
     data.uid = bpf_get_current_uid_gid() >> 32;
     data.type = EVENT_EXECVE;
     fill_container_info(&data);
-    
+
     bpf_get_current_comm(&data.comm, sizeof(data.comm));
     bpf_probe_read_user_str(&data.data.filename, sizeof(data.data.filename), (void *)ctx->si);
-    
+
     events.perf_submit(ctx, &data, sizeof(data));
     return 0;
 }
@@ -151,7 +151,7 @@ int handle_openat(struct pt_regs *ctx) {
     fill_container_info(&data);
 
     bpf_probe_read_user_str(&data.data.filename, sizeof(data.data.filename), (void *)ctx->si);
-    
+
     events.perf_submit(ctx, &data, sizeof(data));
     return 0;
 }
@@ -166,16 +166,14 @@ int handle_connect(struct pt_regs *ctx) {
 
     struct sock *sk = (struct sock *)ctx->di;
     struct sockaddr_in *sin = (struct sockaddr_in *)ctx->si;
-    
+
     bpf_probe_read_kernel(&data.data.daddr, sizeof(data.data.daddr), &sin->sin_addr.s_addr);
     bpf_probe_read_kernel(&data.data.dport, sizeof(data.data.dport), &sin->sin_port);
-    
+
     events.perf_submit(ctx, &data, sizeof(data));
     return 0;
 }
 ```
-
-
 
 **预期很丰满，现实很骨感。** 运行时直接遭遇了 BCC 的编译报错：
 
@@ -203,7 +201,7 @@ PROBE_INDEX(1) // 对应 execve
 
 在安全监控场景下，系统调用的频率（每秒几千次）远未达到内核瓶颈。平铺和尾调用的性能差异几乎测不出来，但代码可读性和开发效率却天差地别。
 
- `container-monitor.c` ：
+`container-monitor.c` ：
 
 ```c
 #include <uapi/linux/ptrace.h>
@@ -318,8 +316,6 @@ TRACEPOINT_PROBE(syscalls, sys_enter_connect)
 }
 
 ```
-
-
 
 ## 三、动态生命线：基于 Docker Event 的映射表热更新
 
@@ -670,23 +666,27 @@ test_ns          PID= 15288 UID=    0 COMM=curl             → CONNECT=2.65.53.
 ## 🔗 相关链接与下一步
 
 **相关代码示例:**
+
 - [`container-monitor.c`](../code/07-monitor/container-monitor.c) - 完整监控面板C代码
 - [`container-monitor.py`](../code/07-monitor/container-monitor.py) - 完整监控面板Python加载器
 - [`container-tail.c`](../code/07-monitor/container-tail.c) - Tail Call版本监控
 - [`container-monitor-broken-sdk.py`](../code/07-monitor/container-monitor-broken-sdk.py) - SDK问题演示
 
 **学习笔记:**
+
 - **上一篇**: [Six、容器感知与身份识别：从内核到云原生](./Six、容器感知与身份识别：从内核到云原生.md)
 - **下一篇**: 待规划(第八篇及后续方向)
 
-**相关文档**: 
+**相关文档**:
+
 - [docker 容器环境准备](./docker%20容器环境准备.md)
 - [eBPF 常用字典](./eBPFBPF%20常用字典.md)
 
 **常见问题:**
+
 - [FAQ](../FAQ.md) - 包含监控面板相关问题解答
 - [项目环境](./项目环境.md) - Ubuntu环境配置
 
 ---
 
-*最后更新: 2026-05-27*
+_最后更新: 2026-05-28_
