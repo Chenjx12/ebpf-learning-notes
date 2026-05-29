@@ -557,7 +557,7 @@ curl http://evil.com
 
 **终端 A：监控输出**
 
-```bash
+```
 [HOST]           PID= 15257 UID= 1000 COMM=bash             → CMD=/usr/bin/docker
 [HOST]           PID= 15266 UID=    0 COMM=containerd-shim  → CMD=/usr/bin/runc
 [HOST]           PID= 15276 UID=    0 COMM=runc             → CMD=/proc/self/fd/7
@@ -675,7 +675,7 @@ test_ns          PID= 15288 UID=    0 COMM=curl             → CONNECT=2.65.53.
 **学习笔记:**
 
 - **上一篇**: [Six、容器感知与身份识别：从内核到云原生](./Six、容器感知与身份识别：从内核到云原生.md)
-- **下一篇**: 待规划(第八篇及后续方向)
+- **下一篇**: [Eight、从监控到检测——构建容器逃逸规则引擎](./Eight、从监控到检测——构建容器逃逸规则引擎.md)
 
 **相关文档**:
 

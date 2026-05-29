@@ -1,0 +1,1010 @@
+chenjx12@learning-ebpf:~/Desktop/u/hgfs/code/08-detection$ ./test-ptrace.sh
+===== Ptrace 逃逸检测测试 =====
+
+[1] 启动ptrace容器...
+✅ ptrace容器已启动
+
+[2] 检查strace是否已安装...
+✅ strace已安装
+
+[3] 执行ptrace测试(应该触发HIGH告警)...
+尝试追踪PID 1 (宿主机init进程)...
+strace: Process 1 attached
+read(5, "\21\0\0\0\0\0\0\0\1\0\0\0LD\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"..., 128) = 128
+read(25, "fprintd\n", 1024)             = 8
+read(25, "", 1024)                      = 0
+read(6, "\267\1\0\0\2\0\0\0\0\0\0\0\0\0\0\0", 272) = 16
+read(25, "populated 0\nfrozen 0\n", 4096) = 21
+read(25, "", 4096)                      = 0
+read(25, "populated 0\nfrozen 0\n", 4120) = 21
+read(6, 0x7ffc75105650, 272)            = -1 EAGAIN (Resource temporarily unavailable)
+read(25, "fprintd\n", 1024)             = 8
+
+===== 测试完成 =====
+请查看监控终端是否有红色ptrace告警!
+
+预期输出:
+🚨 安全告警 - HIGH 级别
+规则: dangerous_ptrace
+Ptrace请求: PTRACE_ATTACH -> 目标PID: 1
+[2] 加载检测规则...
+[Detector] 已加载 2 条规则
+[3] 连接Docker守护进程...
+[4] 初始化容器ID映射...
+[✓] 已映射 0 个容器的进程ID
+
+[✓] 容器逃逸检测系统启动成功!
+[i] 按Ctrl+C停止监控
+
+[INFO] mount - PID:10373 Comm:dockerd CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:17630 Comm:runc:[2:INIT] CID:host
+[INFO] mount - PID:10373 Comm:dockerd CID:host
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SECCOMP_GET_METADATA Target:17727
+[INFO] ptrace - PID:17728 Comm:strace CID:host Req:PTRACE_TRACEME Target:0
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SECCOMP_GET_FILTER Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_GET_SYSCALL_INFO Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SYSCALL Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_GET_SYSCALL_INFO Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SYSCALL Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_GET_SYSCALL_INFO Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SYSCALL Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_GET_SYSCALL_INFO Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SYSCALL Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_GET_SYSCALL_INFO Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SYSCALL Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_GET_SYSCALL_INFO Target:17728
+[INFO] ptrace - PID:17726 Comm:strace CID:host Req:PTRACE_SYSCALL Target:17728
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+🚨 安全告警 - HIGH 级别 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+规则: dangerous_ptrace
+描述: 检测容器内尝试ptrace宿主机1号进程(systemd/init)
+容器: host
+进程: 17726 (strace)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+这是逃逸成功了但是被检测到了吗
