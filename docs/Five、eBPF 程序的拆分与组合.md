@@ -163,7 +163,7 @@ Disassembly of section kprobe/sys_execve:
 
 指令 1-10：构建格式化字符串 + 准备参数
 
-```
+```asm
 1:  r1 = 1680162148          # "d=%" 的部分（小端序）
 2:  *(u32 *)(r10 - 8) = r1   # 存入栈
 3:  r1 = 7597608234306528616  # "hello pi" 的部分
@@ -260,7 +260,7 @@ sudo python3 hello-bpf2bpf.py
 
 在另一个终端：
 
-```bash
+```asm
 # 查看程序
 sudo bpftool prog list | grep sys_enter_execve
 
@@ -364,7 +364,7 @@ int tracepoint__syscalls__sys_enter_execve(struct tracepoint__syscalls__sys_ente
 
 阶段 0：保存上下文（指令 0-1）
 
-```bash
+```asm
    0: (bf) r6 = r1          # 把 ctx（tracepoint 参数指针）存到 r6
    1: (b7) r1 = 0           # r1 清零，后面用来初始化结构体
 ```
@@ -374,7 +374,7 @@ int tracepoint__syscalls__sys_enter_execve(struct tracepoint__syscalls__sys_ente
 
 阶段 1：清零 `struct data_t`（指令 2-19）—— 最"浪费"的部分
 
-```bash
+```asm
    2: (7b) *(u64 *)(r10 - 8) = r1    # data 偏移 0-7
    3: (7b) *(u64 *)(r10 - 16) = r1   # data 偏移 8-15
    4: (7b) *(u64 *)(r10 - 24) = r1   # data 偏移 16-23
@@ -403,7 +403,7 @@ struct data_t {
 
 阶段 2：获取 PID（指令 20-22）
 
-```bash
+```asm
   20: (85) call bpf_get_current_pid_tgid#257360   # 调用 helper
   21: (77) r0 >>= 32                               # 右移 32 位取 PID
   22: (63) *(u32 *)(r10 -160) = r0                # 存到 data.pid
@@ -415,7 +415,7 @@ struct data_t {
 
 阶段 3：获取 UID（指令 23-25）
 
-```bash
+```asm
   23: (85) call bpf_get_current_uid_gid#257936
   24: (77) r0 >>= 32                               # 右移 32 位取 UID
   25: (63) *(u32 *)(r10 -156) = r0                # 存到 data.uid
@@ -425,7 +425,7 @@ struct data_t {
 
 阶段 4：获取时间戳（指令 26-27）
 
-```bash
+```asm
   26: (85) call bpf_ktime_get_ns#257632
   27: (7b) *(u64 *)(r10 -152) = r0                # 存到 data.ts
 ```
@@ -434,7 +434,7 @@ struct data_t {
 
 阶段 5：获取进程名（指令 28-31）
 
-```bash
+```asm
   28: (bf) r1 = r10           # r1 = 栈顶指针
   29: (07) r1 += -144         # r1 指向 data.comm 的位置
   30: (b7) r2 = 16            # 第二个参数：16 字节
@@ -445,7 +445,7 @@ struct data_t {
 
 阶段 6：读取 filename（指令 32-36）——关键！
 
-```bash
+```asm
   32: (79) r3 = *(u64 *)(r6 +16)           # 从 tracepoint args 读 filename 指针
   33: (bf) r1 = r10                          # r1 = 栈顶指针
   34: (07) r1 += -128                        # r1 指向 data.filename
@@ -464,7 +464,7 @@ struct data_t {
 
 阶段 7：提交事件（指令 37-45）
 
-```bash
+```asm
   37: (18) r2 = map[id:13]                   # 加载 Perf Buffer 的 map 指针
   39: (bf) r4 = r10                           # r4 = 栈顶指针
   40: (07) r4 += -160                         # r4 指向 data 起始位置
@@ -478,7 +478,7 @@ struct data_t {
 
 阶段 8：返回（指令 46-47）
 
-```
+```asm
   46: (b7) r0 = 0
   47: (95) exit
 ```
@@ -793,7 +793,7 @@ sudo python3 tailcall-chain.py
 
 ```plain
 hello (table_a[0]) ──尾调用──→ stage_1 (table_b[0]) ──尾调用──→ stage_2
-     [STAGE 0]                      [STAGE 1]                      [STAGE 2]
+     [STAGE 0]                      [STAGE 1]                  [STAGE 2]
 ```
 
 这就是**跨映射表的链式尾调用**——`table_a` 跳到 `stage_1`，`stage_1` 再用自己的 `table_b` 跳到 `stage_2`。

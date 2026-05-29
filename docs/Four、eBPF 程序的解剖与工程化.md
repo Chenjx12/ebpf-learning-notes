@@ -26,7 +26,7 @@ date: 2026.5.24
 
 但一直有个**黑盒**:
 
-```
+```text
 我们写的 C 字符串  →  [BCC 黑盒]  →  内核里跑的 eBPF 程序
 ```
 
@@ -46,7 +46,7 @@ b = BPF(text=program)
 
 BCC 在背后做了这些事:
 
-```
+```mermaid
 flowchart LR
   A[C 字符串] --> B[clang -target bpf]
   B --> C[eBPF 字节码 .o]
@@ -86,7 +86,7 @@ flowchart LR
 
 创建 [`hello-debug.c`](../code/04-anatomy/hello-debug.c):
 
-```
+```c
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
 
@@ -134,7 +134,7 @@ chmod +x build-ebpf.sh
 
 让我们实际运行编译命令，看看真实的结果：
 
-```
+```bash
 # 执行编译（注意：需要添加 -I 参数解决头文件问题）
 clang -target bpf -O2 -g \
       -I/usr/include/x86_64-linux-gnu \
@@ -146,7 +146,7 @@ clang -target bpf -O2 -g \
 
 在 Ubuntu 22.04 上首次编译时，你可能会遇到这个错误：
 
-```
+```bash
 /usr/include/linux/types.h:5:10: fatal error: 'asm/types.h' file not found
 #include <asm/types.h>
          ^~~~~~~~~~~~~
@@ -158,14 +158,14 @@ clang -target bpf -O2 -g \
 
 另外，如果你使用最新版的 libbpf，可能还会遇到：
 
-```
+```bash
 error: too few arguments to function call, expected at least 2, have 1
     bpf_trace_printk("Hello from manual clang compile!");
 ```
 
 这是因为新版 `bpf_trace_printk` 需要两个参数。解决方法是修改 C 代码：
 
-```
+```c
 char fmt[] = "Hello from manual clang compile!";
 bpf_trace_printk(fmt, sizeof(fmt));  // ✅ 正确写法
 ```
@@ -198,7 +198,7 @@ Section Headers:
 
 **实际输出**（只显示关键段）：
 
-```
+```bash
 Section Headers:
   [Nr] Name              Type            Address           Offset
        Size              EntSize         Flags  Link  Info  Align
@@ -226,7 +226,7 @@ Section Headers:
 
 标准的 `objdump` 无法识别 eBPF 架构，我们需要使用 LLVM 提供的专用工具：
 
-```BASH
+```bash
 $ llvm-objdump-14 -d hello-debug.o
 ```
 
@@ -266,7 +266,7 @@ Disassembly of section kprobe/sys_execve:
 
 eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须在栈上手动构建字符串：
 
-```BASH
+```bash
 指令 0-2:  将 8 字节 "!elpmoc gnilpm" 加载到 r1，存入栈 [r10-16]
 指令 3-5:  将 8 字节 " clgnual" 加载到 r1，存入栈 [r10-24]
 指令 6-8:  将 8 字节 "m manua" 加载到 r1，存入栈 [r10-32]
@@ -281,7 +281,7 @@ eBPF 运行在内核态，不能直接访问用户态的数据段，所以必须
 
 **阶段 2：准备调用参数（指令 14-16）**
 
-```bASH
+```bash
 指令 14: r1 = r10          → r1 指向帧指针（栈顶）
 指令 15: r1 += -40         → r1 向前偏移 40 字节，指向字符串起始位置
 指令 16: r2 = 33           → r2 = 字符串长度（包括 NULL 终止符）
@@ -501,7 +501,7 @@ sudo bpftool prog list | wc -l
 
 **实际输出**：
 
-```
+```bash
 $ sudo bpftool prog list | wc -l
 65  # 我的系统上有 65 个 eBPF 程序在运行！
 ```
@@ -520,7 +520,7 @@ sudo bpftool prog dump xlated id 65
 
 **输出结果:** 注意哈，这里有注释的原因是我们前面编译的时候带上了调试信息
 
-```
+```asm
 int hello(struct pt_regs * ctx):
 ; int hello(struct pt_regs *ctx) {
    0: (18) r1 = 0x21656c69706d6f63
@@ -564,7 +564,7 @@ int hello(struct pt_regs * ctx):
 
 #### C 代码 1：字符串定义与初始化
 
-```
+```c
 char fmt[] = "Hello from manual clang compile!";
 ```
 
@@ -592,7 +592,7 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
 
 #### C 代码 2：字符串结尾的 `\0`
 
-``bash
+```bash
 // C 语言字符串默认以 \0 结尾
   12: (b7) r1 = 0               // 把 r1 清零
   13: (73) *(u8 *)(r10 -8) = r1 // 把 0 存到栈上某个位置
@@ -615,8 +615,6 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
   16: (b7) r2 = 33       // 第二个参数：字符串长度 33
 ```
 
-
-
 **操作码解释：**
 
 - **`(bf)`**：**64位寄存器拷贝**（Move 64-bit Register）。`r1 = r10`。
@@ -625,14 +623,12 @@ C 语言里的字符串，在机器层面就是一段连续的内存字节。因
 
 #### C 代码 4：调用与返回
 
-``bash
+```bash
   17: (85) call bpf_trace_printk#-116048  // 调用 helper 函数
 ; return 0;
   18: (b7) r0 = 0   // 设置返回值为 0
   19: (95) exit     // 程序结束
 ```
-
-
 
 **操作码解释：**
 
@@ -729,8 +725,6 @@ sudo cp bpftool /usr/local/sbin/bpftool
 ```
 
 编译成功后，再运行 `sudo bpftool prog dump jited id 65`，你就能看到一堆纯粹的 x86_64 汇编指令了（不过真的很难读懂，因为没有 C 源码对应）。
-
-
 
 ---
 
@@ -939,7 +933,7 @@ hello-perf-plus.py ← 只做加载和回调（简洁清晰，专注业务逻辑
 
 在你的 `04-anatomy` 目录下，创建 `hello-perf-plus.c`，把我们之前写在 Python 字符串里的 C 代码原封不动搬过来：
 
-```
+```c
 // hello-perf-plus.c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
@@ -979,7 +973,7 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
 
 创建新的 [`hello-perf-plus.py`](../code/04-anatomy/hello-perf-plus.py)。注意看 `BPF()` 里面的参数变化：
 
-```
+```python
 #!/usr/bin/python3
 """
 eBPF Tracepoint 示例(C/Python 分离版) - 获取被执行的完整命令路径
@@ -989,7 +983,7 @@ eBPF Tracepoint 示例(C/Python 分离版) - 获取被执行的完整命令路�
 """
 from bcc import BPF
 
-# 🔥 关键改动：用 src_file 替代 text！
+# 关键改动：用 src_file 替代 text！
 b = BPF(src_file="hello-perf-plus.c")
 
 # 用户态回调函数

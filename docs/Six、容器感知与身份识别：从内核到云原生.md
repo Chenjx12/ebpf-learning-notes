@@ -309,7 +309,7 @@ chenjx12@learning-ebpf:~/Desktop$ stat /sys/fs/cgroup/system.slice/docker-af153c
 
 在 `06-container/` 目录下新建文件，把第一把钥匙的代码完整拷过来，再加上 Namespace 获取逻辑：
 
-```
+```c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
 #include <linux/nsproxy.h>        // 补全 nsproxy 结构体定义
@@ -367,7 +367,7 @@ out:
 
 同样新建文件，在打印时把 `pid_ns` 也格式化输出：
 
-```
+```python
 #!/usr/bin/python3
 from bcc import BPF
 
@@ -401,13 +401,13 @@ while True:
 
 **终端 A：运行新监控**
 
-```
+```bash
 sudo python3 container-ns.py
 ```
 
 **终端 B：宿主机执行命令**
 
-```
+```bash
 ls
 # 预期输出类似：CG=0x...fa01 NS=0x...e8f1 PID=12345 UID=1000 COMM=bash → CMD=/usr/bin/ls
 CG=0x29b6             NS=0xeffffffc         PID=  3648 UID= 1000 COMM=bash             → CMD=/usr/bin/ls
@@ -415,7 +415,7 @@ CG=0x29b6             NS=0xeffffffc         PID=  3648 UID= 1000 COMM=bash      
 
 **终端 C：Docker 容器执行命令**
 
-```
+```bash
 docker exec test_ns ls
 # 预期输出类似：CG=0x3740 NS=0x...a2c3 PID=7385 UID=0 COMM=runc:[2:INIT] → CMD=/usr/bin/ls
 CG=0x29e0             NS=0xeffffffc         PID=  3649 UID= 1000 COMM=bash             → CMD=/usr/bin/docker
@@ -447,7 +447,7 @@ CG=0x2a82             NS=0xf000036f         PID=  3670 UID=    0 COMM=runc:[2:IN
 
 在终端 C 执行：
 
-```
+```bash
 # 查看容器内 PID 1 的 PID Namespace
 docker exec test_ns ls -la /proc/1/ns/pid
 # 输出：
@@ -479,7 +479,7 @@ F000 036F
 
 编写 `container-map.c` ：
 
-```
+```c
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
 
@@ -547,7 +547,7 @@ sudo pip3 install docker
 
 对应的 `container-map.py` ：
 
-```
+```python
 #!/usr/bin/python3
 from bcc import BPF
 import docker
@@ -612,7 +612,7 @@ while True:
 
 **终端 A：启动监控**
 
-```
+```bash
 sudo python3 container-map.py
 # 预期输出：
 # [Sync] test_ns -> inode 4663 (0x1237)
@@ -621,7 +621,7 @@ sudo python3 container-map.py
 
 **终端 B：宿主机操作**
 
-```
+```bash
 ls
 # 预期输出：CG=[HOST]           PID=12345 UID=1000 COMM=bash → CMD=/usr/bin/ls
 CG=[HOST]           PID=  4100 UID= 1000 COMM=bash             → CMD=/usr/bin/ls
@@ -631,7 +631,7 @@ CG=[HOST]           PID=  4100 UID= 1000 COMM=bash             → CMD=/usr/bin/
 
 **终端 C：Docker 容器操作**
 
-```
+```bash
 docker exec -it test_ns bash
 # 在容器内输入：
 cat /etc/hostname
@@ -650,7 +650,7 @@ CG=test_ns PID=4134  UID=0  COMM=bash             → CMD=/usr/bin/cat
 
 ### 容器初始化的三条命令
 
-```
+```bash
 CG=test_ns PID=4131  COMM=bash → CMD=/usr/bin/groups
 CG=test_ns PID=4133  COMM=bash → CMD=/usr/bin/dircolors
 CG=test_ns PID=4134  COMM=bash → CMD=/usr/bin/cat

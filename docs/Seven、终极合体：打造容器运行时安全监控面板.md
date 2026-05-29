@@ -177,7 +177,7 @@ int handle_connect(struct pt_regs *ctx) {
 
 **预期很丰满，现实很骨感。** 运行时直接遭遇了 BCC 的编译报错：
 
-```
+```bash
 /virtual/main.c:62:21: error: passing 'struct data_t' to parameter of incompatible type 'void *'
     prog_array.call(data, 1);
 
@@ -557,7 +557,7 @@ curl http://evil.com
 
 **终端 A：监控输出**
 
-```
+```bash
 [HOST]           PID= 15257 UID= 1000 COMM=bash             → CMD=/usr/bin/docker
 [HOST]           PID= 15266 UID=    0 COMM=containerd-shim  → CMD=/usr/bin/runc
 [HOST]           PID= 15276 UID=    0 COMM=runc             → CMD=/proc/self/fd/7

