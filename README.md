@@ -106,10 +106,11 @@ bash code/08-detection/test-ptrace.sh
 # 4）敏感文件访问测试（可选，当前已注释openat事件输出）
 # bash code/08-detection/test-openat.sh
 
+```
+
 ### 环境搭建脚本
 
 详见 [`setup.sh`](./setup.sh) - 一键配置 eBPF 学习环境
-```
 
 ---
 
