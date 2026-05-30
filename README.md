@@ -124,6 +124,7 @@ bash code/09-response/test-ptrace-simple.sh
 # 5）验证容器网络是否被断开
 docker inspect ptrace-test | grep Networks
 
+```
 
 ### 环境搭建脚本
 
