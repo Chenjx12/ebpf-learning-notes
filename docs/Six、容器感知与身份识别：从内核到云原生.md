@@ -307,61 +307,37 @@ chenjx12@learning-ebpf:~/Desktop$ stat /sys/fs/cgroup/system.slice/docker-af153c
 
 ### 1. 创建 `container-ns.c`
 
-在 `06-container/` 目录下新建文件，把第一把钥匙的代码完整拷过来，再加上 Namespace 获取逻辑：
+在 `06-container/` 目录下新建文件，核心改动是深入 `task_struct` 获取 PID Namespace Inode（完整代码见 [`code/06-container/container-ns.c`](../code/06-container/container-ns.c)）：
 
 ```c
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
-#include <linux/nsproxy.h>        // 补全 nsproxy 结构体定义
-#include <linux/pid_namespace.h>  // 补全 pid_namespace 结构体定义
-
-// 1. 事件结构体：新增 pid_ns_inum
+// container-ns.c — 新增 pid_ns_inum 字段
 struct data_t {
-    u32 pid;
-    u32 uid;
-    u64 cgroup_id;
-    u32 pid_ns_inum;  // PID Namespace 的 Inode 号
-    char comm[16];
-    char filename[128];
+    u32 pid;  u32 uid;  u64 cgroup_id;
+    u32 pid_ns_inum;  // 🆕 PID Namespace 的 Inode 号
+    char comm[16];  char filename[128];
 };
 
-BPF_PERF_OUTPUT(events);
-
-TRACEPOINT_PROBE(syscalls, sys_enter_execve)
-{
-    struct data_t data = {};
-
-    // 获取公共信息
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
-    data.cgroup_id = bpf_get_current_cgroup_id();
-
-    // 通过 task_struct 深入内核获取 PID Namespace Inode
+TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
+    // 🔥 深入内核数据结构：task_struct → nsproxy → pid_namespace → ns.inum
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-    
-    // 第1步：读取 nsproxy 指针
     struct nsproxy *nsproxy = NULL;
     bpf_probe_read_kernel(&nsproxy, sizeof(nsproxy), &task->nsproxy);
     if (!nsproxy) goto out;
 
-    // 第2步：读取 pid_namespace 指针
     struct pid_namespace *pid_ns = NULL;
     bpf_probe_read_kernel(&pid_ns, sizeof(pid_ns), &nsproxy->pid_ns_for_children);
     if (!pid_ns) goto out;
 
-    // 第3步：读取 ns.inum (Namespace 的 Inode 号)
     unsigned int inum = 0;
     bpf_probe_read_kernel(&inum, sizeof(inum), &pid_ns->ns.inum);
     data.pid_ns_inum = inum;
-
 out:
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-    bpf_probe_read_user_str(&data.filename, sizeof(data.filename), (void *)args->filename);
-
-    events.perf_submit(args, &data, sizeof(data));
-    return 0;
+    // ... 后续处理 ...
 }
 ```
+
+> 📄 完整代码: [`code/06-container/container-ns.c`](../code/06-container/container-ns.c)（含 `nsproxy.h`、`pid_namespace.h` 头文件依赖）
+> ⚠️ 编译需要补全 `#include <linux/nsproxy.h>` 和 `#include <linux/pid_namespace.h>`，否则报 `incomplete definition` 错误。
 
 ### 2. 创建 `container-ns.py`
 
@@ -475,64 +451,36 @@ F000 036F
 
 ### 1. 内核态：定义映射 Map
 
-在 C 代码里新增一个 Hash Map：
-
-编写 `container-map.c` ：
+在 C 代码里新增一个 Hash Map，用 cgroup_id 做键来查询容器名（完整代码见 [`code/06-container/container-map.c`](../code/06-container/container-map.c)）：
 
 ```c
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
-
-// 容器身份信息
+// container-map.c — cgroup_id → 容器名映射
 struct container_info {
-    char name[64]; // 容器名，如 "happy_nginx"
+    char name[64];  // 如 "happy_nginx"
 };
+BPF_HASH(container_map, u64, struct container_info);  // 键=cgroup inode
 
-// 键是 cgroup_id (u64)，值是 container_info
-BPF_HASH(container_map, u64, struct container_info);
-
-// 修改 data_t，用人类可读的名字代替长字符串
 struct data_t {
-    u32 pid;
-    u32 uid;
+    // ... 基础字段 ...
     u64 cgroup_id;
-    char container_name[64]; // 替换原来的 cgroup_id 展示
-    char comm[16];
-    char filename[128];
+    char container_name[64];  // 替代原来的裸数字
 };
 
-BPF_PERF_OUTPUT(events);
-
-TRACEPOINT_PROBE(syscalls, sys_enter_execve)
-{
-    struct data_t data = {};
-
-    // 1. 获取公共信息
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
+TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
     data.cgroup_id = bpf_get_current_cgroup_id();
-
-    // 2. 查询容器身份映射表
     struct container_info *info = container_map.lookup(&data.cgroup_id);
     if (info) {
-        // 查到了：打上容器名标签
-        bpf_probe_read_kernel_str(&data.container_name, sizeof(data.container_name), info->name);
+        // 容器进程 → 打上容器名标签
+        bpf_probe_read_kernel_str(&data.container_name, ..., info->name);
     } else {
-        // 查不到的，就是宿主机进程
-        char host[] = "[HOST]";
-        bpf_probe_read_kernel_str(&data.container_name, sizeof(host), host);
+        // 宿主机进程 → [HOST]
+        bpf_probe_read_kernel_str(&data.container_name, ..., "[HOST]");
     }
-
-    // 3. 获取进程名和执行的命令
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-    bpf_probe_read_user_str(&data.filename, sizeof(data.filename), (void *)args->filename);
-
-    // 4. 提交事件到用户态
     events.perf_submit(args, &data, sizeof(data));
-
-    return 0;
 }
 ```
+
+> 📄 完整代码: [`code/06-container/container-map.c`](../code/06-container/container-map.c)
 
 ### 2. 用户态：用 Docker SDK 填充 Map
 
@@ -545,66 +493,29 @@ sudo pip3 install docker
 # 注意要 sudo ，这样使用 root 权限执行 py 时才能够找到对应的 SDK
 ```
 
-对应的 `container-map.py` ：
+对应的 `container-map.py`（完整代码见 [`code/06-container/container-map.py`](../code/06-container/container-map.py)）：
 
 ```python
 #!/usr/bin/python3
-from bcc import BPF
-import docker
-import os
-import ctypes as ct
+# container-map.py — 用户态填充 cgroup_id → 容器名映射表
 
-# 定义与 C 语言对应的用户态结构体
 class ContainerInfo(ct.Structure):
     _fields_ = [("name", ct.c_char * 64)]
 
-# 注意这里加载的是 container-map.c
 b = BPF(src_file="container-map.c")
 
-# 核心：扫描 Docker 容器，构建映射表
 def sync_container_map():
-    client = docker.from_env()
+    """遍历 Docker 容器，stat cgroup 目录获取 inode，写入 eBPF Map"""
     for container in client.containers.list():
-        long_id = container.id
-        name = container.name
-        
-        # 拼接 cgroup v2 路径
-        cgroup_path = f"/sys/fs/cgroup/system.slice/docker-{long_id}.scope"
-        
-        # 有些容器可能还没完全启动
-        if not os.path.exists(cgroup_path):
-            continue
-            
-        # 获取 inode
+        cgroup_path = f"/sys/fs/cgroup/system.slice/docker-{container.id}.scope"
         inode = os.stat(cgroup_path).st_ino
-        
-        # 写入 eBPF Map
-        key = ct.c_uint64(inode)
-        value = ContainerInfo()
-        value.name = name.encode('utf-8')
-        b["container_map"][key] = value
-        print(f"[Sync] {name} -> inode {inode} (0x{inode:x})")
+        b["container_map"][ct.c_uint64(inode)] = name.encode()
 
-# 启动时全量同步一次
 sync_container_map()
-
-def print_event(cpu, data, size):
-    event = b["events"].event(data)
-    cg_name = event.container_name.decode()
-    print(f"CG={cg_name:16s} PID={event.pid:6d} UID={event.uid:5d} "
-          f"COMM={event.comm.decode():16s} → CMD={event.filename.decode()}")
-
-b["events"].open_perf_buffer(print_event)
-
-print("\nTracing execve with Container Identity, hit Ctrl-C to stop.")
-print("Try: ls (host) vs docker exec -it test_ns bash :cat /etc/hostname")
-
-while True:
-    try:
-        b.perf_buffer_poll()
-    except KeyboardInterrupt:
-        exit()
+# 启动时全量同步，后续 docker exec 进入容器 → execve 触发 → 内核态查 map → 打标签
 ```
+
+> 📄 完整代码: [`code/06-container/container-map.py`](../code/06-container/container-map.py)
 
 ## 五、实战：带容器身份的 execve 监控
 

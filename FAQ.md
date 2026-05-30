@@ -666,6 +666,208 @@ def listen_docker_events():
 
 ---
 
+### Q21: 为什么容器内 `apt-get update` 报 DNS 解析失败，宿主机却有网？
+
+**现象**：
+
+在 VMware 虚拟机中，宿主机可以正常访问外网，但 Docker 容器内 `apt-get update` 报错：
+```
+Temporary failure resolving 'archive.ubuntu.com'
+```
+
+**原因**：
+
+`/etc/docker/daemon.json` 中硬编码了公网 DNS（如 `8.8.8.8`、`114.114.114.114`），但容器内的 DNS 请求走 Docker bridge → 宿主机 NAT → VMware NAT。在 VMware NAT 网络下，容器无法直接访问这些公网 DNS。
+
+**解决方案**：
+
+将 Docker DNS 配置改为 VMware NAT 网关（即宿主机的默认路由地址）：
+
+```bash
+# 查看宿主机的 DNS 和网关
+resolvectl dns
+# 输出: Link 2 (ens33): 192.168.65.2
+
+# 修改 daemon.json
+sudo tee /etc/docker/daemon.json << 'EOF'
+{
+  "dns": ["192.168.65.2"]
+}
+EOF
+
+# 重启 Docker
+sudo systemctl restart docker
+```
+
+重启后新创建的容器会使用该 DNS，旧容器需要 `docker restart` 或重建才能生效。
+
+**参考**：第九篇实战测试中发现的问题。
+
+---
+
+### Q22: 为什么容器内 `strace -p 1` 报 Permission denied，即使加了 `--cap-add=SYS_PTRACE`？
+
+**现象**：
+
+```bash
+docker run -d --name test --cap-add=SYS_PTRACE --pid=host ubuntu:22.04 sleep 3600
+docker exec test strace -p 1
+# strace: attach: ptrace(PTRACE_SEIZE, 1): Permission denied
+```
+
+**原因**：
+
+Linux 内核的 `ptrace_scope` 参数限制了 ptrace 的使用范围：
+- `0`：任何进程可以 ptrace 任何进程（最宽松）
+- `1`（默认）：只有父进程或 root 可以 ptrace
+- `2`：只有 `CAP_SYS_PTRACE` 可以，但仍然受限于 admin-only
+- `3`：完全禁止
+
+即使容器有 `CAP_SYS_PTRACE`，`ptrace_scope=1` 仍然阻止非祖先进程附加到 systemd(PID 1)。
+
+**解决方案**：
+
+```bash
+# 临时放宽（测试环境）
+sudo sysctl -w kernel.yama.ptrace_scope=0
+# 或
+echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+```
+
+生产环境应保持默认值，改为监控 ptrace 的 syscall 入口（eBPF tracepoint 在权限检查之前就已捕获）。
+
+**参考**：第九篇 ptrace 注入检测测试中发现的问题。
+
+---
+
+### Q23: 为什么 `docker exec` 创建的进程，eBPF 探针有时捕获不到它的系统调用？
+
+**现象**：
+
+`docker exec` 在容器内执行 `mount -t proc proc /tmp/host_proc`，mount 成功了（`/proc/mounts` 有记录），但 eBPF 的 `sys_enter_mount` tracepoint 没有捕获到该事件。
+
+**原因**：
+
+这是一个内核版本的差异问题。在较新的内核（如 6.8.0）上，进程在非宿主 mount namespace 中的 `mount()` 调用，可能不被宿主机侧的 syscall tracepoint 触发。这与 mount namespace 的隔离机制有关。
+
+**验证方法**：
+
+```bash
+# 在宿主机上挂载，确认 tracepoint 正常工作
+sudo mount -t proc proc /tmp/mtest
+# → eBPF 能捕获
+
+# 在容器内挂载（--privileged）
+docker exec --privileged test mount -t proc proc /tmp/test
+# → eBPF 可能捕获不到（kernel 6.8+）
+```
+
+**影响范围**：
+
+- 不影响 ptrace 和 openat 的 tracepoint（这两个不受 mount namespace 影响）
+- kernel 5.15（标准 Ubuntu 22.04 初始内核）无此问题
+- 不影响告警规则逻辑本身的正确性
+
+**参考**：第九篇实战测试中发现的问题。
+
+---
+
+### Q24: Python 脚本用 `sudo python3 xxx.py > log.txt` 重定向输出，为什么日志文件长时间为空？
+
+**现象**：
+
+```bash
+sudo python3 escape-respond.py > /tmp/log.txt 2>&1 &
+tail -f /tmp/log.txt
+# 等了十几秒都没看到 Python 的 print 输出，以为程序卡死了
+```
+
+**原因**：
+
+Python 的标准输出在重定向到文件时默认使用**全缓冲**（block buffered），而不是终端下的行缓冲（line buffered）。输出会积压在缓冲区中，直到缓冲区满（通常是 8KB）或程序退出才会写入文件。
+
+**解决方案**：
+
+```bash
+# 方法 1: 使用 PYTHONUNBUFFERED 环境变量
+sudo PYTHONUNBUFFERED=1 python3 escape-respond.py > /tmp/log.txt 2>&1 &
+
+# 方法 2: 使用 python3 -u 参数
+sudo python3 -u escape-respond.py > /tmp/log.txt 2>&1 &
+
+# 方法 3: 使用 stdbuf
+sudo stdbuf -oL python3 escape-respond.py > /tmp/log.txt 2>&1 &
+```
+
+**参考**：第九篇实战测试中发现的问题。第八篇使用 `b.trace_print()` 时不受影响，因为 BCC 内部直接读 trace_pipe。
+
+---
+
+### Q25: 多个 eBPF 监控实例同时运行会导致什么问题？
+
+**现象**：
+
+启动了多个 `escape-respond.py` 实例，发现：
+- 有些实例收不到任何事件
+- Python 进程 CPU 占用高达 98%
+- `bpftool prog list` 显示同一个 tracepoint 被挂载了多次
+
+**原因**：
+
+eBPF tracepoint 允许多个程序挂载到同一个点。但当多个程序使用同一个 Ring Buffer 名称时，只有第一个能正常消费事件，其余实例的 `ring_buffer_poll()` 会空转消耗 CPU。
+
+**解决方案**：
+
+```bash
+# 启动新实例前，先杀掉所有旧实例
+sudo pkill -9 -f "escape-respond"
+sleep 2
+
+# 确认干净
+ps aux | grep escape-respond | grep -v grep
+# 应该无输出
+
+# 确认 BPF 程序已卸载
+sudo bpftool prog list | grep "sys_enter"
+# 应该无输出
+```
+
+**参考**：第九篇实战测试中发现的问题。BCC 的 `trace_print()` 模式不受此影响。
+
+---
+
+### Q26: 为什么告警显示"容器: host"，响应引擎跳过了本该响应的容器事件？
+
+**现象**：
+
+```
+🚨 安全告警 - HIGH 级别
+容器: host        ← 明明是容器内的 strace 进程！
+进程: 35475 (strace)
+[INFO] 跳过宿主机事件,不执行响应
+```
+
+**原因**：
+
+第八/九篇的 PID 映射表 `container_map` 是启动时一次性全量同步的。`docker exec` 创建的新进程（如 strace）的 PID 在映射表中不存在，eBPF 内核态代码默认返回 `"host"`。`strace` 在微秒级完成 ptrace 调用就退出，用户态来不及补救。
+
+**解决方案（第九篇已实现）**：
+
+1. **内核态**：在 eBPF 事件结构体中新增 `u64 cgroup_id`，通过 `bpf_get_current_cgroup_id()` 在事件发生瞬间记录
+2. **用户态**：启动时构建 `cgroup_inode → container_id` 映射表
+3. **事件处理时**：PID 映射未命中 → 用内核态记录的 `cgroup_id` 在映射表中查找容器 ID
+
+```python
+# escape-respond.py handle_event() 中的 cgroup fallback
+if raw_cid in ('host', '', 'unknown'):
+    if event_cgid in self.cgroup_map:
+        raw_cid = self.cgroup_map[event_cgid]
+```
+
+**参考**：第九篇核心改进。详见 `code/09-response/escape-detect.c` 和 `escape-respond.py`。
+
+---
+
 ## 📚 学习资源
 
 ### Q14: 有哪些好的学习资源?

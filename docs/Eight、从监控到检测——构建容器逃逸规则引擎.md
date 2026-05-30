@@ -155,300 +155,65 @@ exclude:
 
 ### **3.1 Detector 类设计**
 
-创建 `detector.py`:
+创建 `detector.py`（完整代码见 [`code/08-detection/detector.py`](../code/08-detection/detector.py)）：
 
 ```python
-#!/usr/bin/env python3
-import yaml
-from datetime import datetime
-import fnmatch
-
-
+# detector.py — YAML 规则引擎核心
 class EscapeDetector:
     def __init__(self, rules_file):
-        with open(rules_file, 'r') as f:
-            self.rules = yaml.safe_load(f).get('rules', [])
+        # 加载 YAML 规则，按 event_type 建索引避免全量遍历
         self.rule_index = self._build_rule_index()
-        print(f"[Detector] 已加载 {len(self.rules)} 条规则")
-
-    def _build_rule_index(self):
-        index = {}
-        for rule in self.rules:
-            event_type = rule.get('condition', {}).get('event_type')
-            if event_type not in index:
-                index[event_type] = []
-            index[event_type].append(rule)
-        return index
 
     def check_event(self, event_dict):
-        event_type = event_dict.get('event_type')
-        if not event_type or event_type not in self.rule_index:
-            return []
-        matched = []
+        """三步检测：索引查找 → 条件匹配 → 排除过滤"""
         for rule in self.rule_index[event_type]:
             if self._match(event_dict, rule['condition']):
                 if not self._is_excluded(event_dict, rule.get('exclude', {})):
-                    matched.append(rule)
-        return matched
+                    matched.append(rule)   # 🚨 命中规则
 
     def _match(self, event, condition):
-        """精确匹配 + 列表OR匹配"""
-        for key, expected in condition.items():
-            if key not in event:
-                return False
-            actual = event[key]
-            if isinstance(expected, list):
-                if actual not in expected:
-                    return False
-            elif actual != expected:
-                return False
-        return True
+        """精确匹配 + 列表 OR 匹配（所有条件 AND）"""
 
     def _is_excluded(self, event, exclude):
-        """检查事件是否匹配排除条件（支持通配符）"""
-        for key, patterns in exclude.items():
-            if key not in event:
-                continue
-            actual = event[key]
-            if isinstance(patterns, str):
-                patterns = [patterns]
-            for pattern in patterns:
-                if fnmatch.fnmatch(str(actual), pattern):
-                    return True  # 命中排除规则，跳过
-        return False
-
-    def generate_alert(self, rule, event):
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'rule_name': rule['name'],
-            'severity': rule['severity'],
-            'description': rule['description'],
-            'event': event
-        }
-
-
-def print_alert(alert):
-    RED = '\033[91m'
-    RESET = '\033[0m'
-    BG_RED = '\033[101m'
-    sev = alert['severity']
-    color = BG_RED if sev == 'CRITICAL' else RED
-    print(f"\n{color}🚨 安全告警 - {sev} 级别 {RESET}")
-    print(f"{RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
-    print(f"{RED}规则: {alert['rule_name']}{RESET}")
-    print(f"{RED}描述: {alert['description']}{RESET}")
-    evt = alert['event']
-    print(f"{RED}容器: {evt.get('container_id', 'unknown')}{RESET}")
-    print(f"{RED}进程: {evt.get('pid')} ({evt.get('comm')}){RESET}")
-    if 'fstype' in evt:
-        print(f"{RED}文件系统: {evt['fstype']} -> 目标: {evt.get('target_path')}{RESET}")
-    if 'request' in evt:
-        print(f"{RED}Ptrace请求: {evt['request']} -> 目标PID: {evt.get('target_pid')}{RESET}")
-    # 🚀 留给读者的作业扩展：在告警中显示 openat 的路径
-    if evt.get('event_type') == 'openat' and 'target_path' in evt:
-        print(f"{RED}访问路径: {evt['target_path']}{RESET}")
-        
-    print(f"{color}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}\n")
-
-
-
-def log_alert(alert, log_file="detection.log"):
-    evt = alert['event']
-    with open(log_file, 'a') as f:
-        f.write(f"[{alert['timestamp']}] {alert['severity']} | "
-                f"{alert['rule_name']} | "
-                f"容器={evt.get('container_id','?')} "
-                f"PID={evt.get('pid','?')} "
-                f"Comm={evt.get('comm','?')}\n")
+        """通配符排除（fnmatch），如排除 dockerd/containerd 的正常挂载"""
 ```
+
+> 📄 完整代码: [`code/08-detection/detector.py`](../code/08-detection/detector.py)（含 `print_alert()` 彩色告警输出和 `log_alert()` 审计日志）
 
 ### **3.2 集成到主程序**
 
-修改 `escape-detect.py`:
+修改 `escape-detect.py`（完整代码见 [`code/08-detection/escape-detect.py`](../code/08-detection/escape-detect.py)）：
 
 ```python
 #!/usr/bin/env python3
-""" 
-容器逃逸检测系统 - 基于eBPF 
-对应笔记: Eight、从监控到检测——构建容器逃逸规则引擎 
-"""
-from bcc import BPF
-import ctypes as ct
-import docker
-import time
-import sys
-from detector import EscapeDetector, print_alert
-
-# ptrace 请求常量完整映射表
-PTRACE_MAP = {
-    0: "PTRACE_TRACEME",
-    1: "PTRACE_PEEKTEXT",
-    2: "PTRACE_PEEKDATA",
-    3: "PTRACE_PEEKUSER",
-    4: "PTRACE_POKETEXT",
-    5: "PTRACE_POKEDATA",
-    6: "PTRACE_POKEUSER",
-    7: "PTRACE_CONT",
-    8: "PTRACE_KILL",
-    9: "PTRACE_SINGLESTEP",
-    12: "PTRACE_GETREGS",
-    13: "PTRACE_SETREGS",
-    14: "PTRACE_GETFPREGS",
-    15: "PTRACE_SETFPREGS",
-    16: "PTRACE_ATTACH",
-    17: "PTRACE_DETACH",
-    24: "PTRACE_SYSCALL",
-    0x4200: "PTRACE_SECCOMP_GET_FILTER",
-    0x4201: "PTRACE_SECCOMP_GET_METADATA",
-    0x4206: "PTRACE_SECCOMP_GET_METADATA", # 部分内核版本的兼容
-    0x420e: "PTRACE_GET_SYSCALL_INFO",
-    0x1000: "PTRACE_SEIZE",
-    0x1001: "PTRACE_INTERRUPT",
-    0x1002: "PTRACE_LISTEN",
-}
+# escape-detect.py — 容器逃逸检测系统（集成规则引擎）
 
 class ContainerEscapeMonitor:
-    """容器逃逸监控系统"""
-    
     def __init__(self, rules_file='rules.yaml'):
-        # 初始化eBPF程序
-        print("[1] 编译并加载eBPF程序...")
-        self.bpf = BPF(src_file="escape-detect.c")
-        
-        # 初始化检测引擎
-        print("[2] 加载检测规则...")
-        self.detector = EscapeDetector(rules_file)
-        
-        # 初始化Docker客户端
-        print("[3] 连接Docker守护进程...")
-        try:
-            self.docker_client = docker.from_env()
-        except docker.errors.DockerException as e:
-            print(f"[!] Docker连接失败: {e}", file=sys.stderr)
-            print("[!] 提示: 请确保Docker正在运行", file=sys.stderr)
-            sys.exit(1)
-        
-        # 初始化容器映射
-        print("[4] 初始化容器ID映射...")
-        self.update_container_map()
-        print("\n[✓] 容器逃逸检测系统启动成功!")
-        print("[i] 按Ctrl+C停止监控\n")
-    
-    def update_container_map(self):
-        """更新容器ID映射表"""
-        try:
-            containers = self.docker_client.containers.list()
-            for container in containers:
-                top_result = container.top()
-                for process in top_result['Processes']:
-                    pid_str = process[1].strip()
-                    if not pid_str.isdigit():
-                        continue
-                    pid = int(pid_str)
-                    cid = container.id[:12]
-                    
-                    ContainerId = self.bpf['container_map'].Leaf
-                    c_id = ContainerId()
-                    c_id.id = cid.encode('utf-8')
-                    self.bpf['container_map'][ct.c_uint32(pid)] = c_id
-            print(f"[✓] 已映射 {len(containers)} 个容器的进程ID")
-        except Exception as e:
-            print(f"[!] 更新容器映射失败: {e}", file=sys.stderr)
-    
+        self.bpf = BPF(src_file="escape-detect.c")        # 1. 加载eBPF
+        self.detector = EscapeDetector(rules_file)         # 2. 规则引擎
+        self.docker_client = docker.from_env()             # 3. Docker连接
+        self.update_container_map()                        # 4. PID→容器映射
+
     def handle_event(self, cpu, data, size):
-        """处理从eBPF捕获的事件"""
-        try:
-            event = self.bpf['events'].event(data)
-            
-            # 修正：支持 3 种事件类型的映射，不再用 if-else 硬编码
-            event_type_map = {1: 'mount', 2: 'ptrace', 3: 'openat'}
-            
-            # 转换为字典格式
-            event_dict = {
-                'event_type': event_type_map.get(event.event_type, 'unknown'),
-                'pid': event.pid,
-                'uid': event.uid,
-                'comm': event.comm.decode('utf-8', errors='replace'),
-                'container_id': event.container_id.decode('utf-8', errors='replace').rstrip('\x00'),
-                'timestamp': time.time()
-            }
+        """事件处理主循环：解析 → 匹配规则 → 告警输出"""
+        event_dict = {
+            'event_type': event_type_map[event.event_type],
+            'pid': event.pid, 'comm': ..., 'container_id': ...,
+            # mount 特有: fstype, target_path
+            # ptrace 特有: target_pid, request (含 PTRACE_MAP 映射)
+            # openat 特有: target_path (⚠️ 当前未启用，噪音太大)
+        }
+        matched = self.detector.check_event(event_dict)
+        if matched:  print_alert(...)   # 🚨 红色告警
+        else:        print(INFO...)     # 绿色正常事件
 
-            # 根据事件类型添加特定字段
-            if event.event_type == 1: # MOUNT
-                event_dict['fstype'] = event.fstype.decode('utf-8', errors='replace').rstrip('\x00')
-                event_dict['target_path'] = event.target_path.decode('utf-8', errors='replace').rstrip('\x00')
-            elif event.event_type == 2: # PTRACE
-                event_dict['target_pid'] = event.target_pid
-                # 完善的 request 映射逻辑
-                request_val = event.request_raw
-                mapped_req = PTRACE_MAP.get(request_val)
-                if not mapped_req:
-                    mapped_req = PTRACE_MAP.get(request_val & 0xFFFFFFFF)
-                if mapped_req:
-                    event_dict['request'] = mapped_req
-                else:
-                    event_dict['request'] = f"UNKNOWN(0x{request_val:x}/{request_val})"
-                    
-            #  留的扩展：处理 openat 事件
-            # ⚠️ 注意：目前尚未实现宿主机噪音筛选功能，openat 会产生大量正常事件
-            # 因此暂时注释掉 openat 事件的日志输出，避免信息过载
-            # elif event.event_type == 3: # OPENAT
-            #     event_dict['target_path'] = event.target_path.decode('utf-8', errors='replace').rstrip('\x00')
-
-            # 交给检测引擎检查
-            matched_rules = self.detector.check_event(event_dict)
-            if matched_rules:
-                # 匹配到规则,生成告警
-                for rule in matched_rules:
-                    alert = self.detector.generate_alert(rule, event_dict)
-                    print_alert(alert)
-            else:
-                # 正常事件,绿色输出，完善显示信息
-                if event_dict['event_type'] == 'ptrace':
-                    print(f"\033[92m[INFO] {event_dict['event_type']} - PID:{event_dict['pid']} Comm:{event_dict['comm']} CID:{event_dict['container_id']} Req:{event_dict['request']} Target:{event_dict['target_pid']}\033[0m")
-                # ⚠️ 已注释：暂时不输出 openat 正常事件（未实现宿主机噪音过滤）
-                # elif event_dict['event_type'] == 'openat':
-                #     print(f"\033[92m[INFO] {event_dict['event_type']} - PID:{event_dict['pid']} Comm:{event_dict['comm']} CID:{event_dict['container_id']} Path:{event_dict['target_path']}\033[0m")
-                else:
-                    print(f"\033[92m[INFO] {event_dict['event_type']} - PID:{event_dict['pid']} Comm:{event_dict['comm']} CID:{event_dict['container_id']}\033[0m")
-                    
-        except Exception as e:
-            print(f"[ERROR] 处理事件异常: {e}", file=sys.stderr)
-
-    
     def run(self):
-        """运行监控系统"""
-        # 打开Ring Buffer
         self.bpf['events'].open_ring_buffer(self.handle_event)
-        
-        # 主循环
-        try:
-            while True:
-                self.bpf.ring_buffer_poll()
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            print("\n[i] 停止监控")
-
-
-def main():
-    """主函数"""
-    import argparse
-    parser = argparse.ArgumentParser(description='容器逃逸检测系统')
-    parser.add_argument('-r', '--rules', default='rules.yaml', help='规则文件路径')
-    args = parser.parse_args()
-    
-    # 创建监控器实例
-    monitor = ContainerEscapeMonitor(args.rules)
-    
-    # 运行监控
-    monitor.run()
-
-
-if __name__ == "__main__":
-    main()
+        while True: self.bpf.ring_buffer_poll()  # 事件驱动循环
 ```
 
----
+> 📄 完整代码: [`code/08-detection/escape-detect.py`](../code/08-detection/escape-detect.py)（含 PTRACE_MAP 完整映射表、三种事件类型处理、正常事件绿色输出）
 
 ## 四、实战演练：procfs 挂载逃逸检测
 
@@ -465,118 +230,36 @@ cat /tmp/host_proc/1/cmdline  # 读取宿主机 init 进程
 
 ### **4.2 eBPF 探针代码**
 
-创建 `escape-detect.c`:
+创建 `escape-detect.c`（完整代码见 [`code/08-detection/escape-detect.c`](../code/08-detection/escape-detect.c)）：
 
 ```c
-// escape-detect.c - 容器逃逸检测eBPF探针（修正版）
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
-
-// 事件类型定义
-#define EVENT_MOUNT 1
-#define EVENT_PTRACE 2
-// #define EVENT_OPENAT 3
-
-// 通用事件结构
+// escape-detect.c — 三维探针（mount + ptrace + openat）
 struct event {
-    u32 event_type;
-    u32 pid;
-    u32 uid;
-    char comm[16];
-    char container_id[64];
-
-    // mount相关字段
-    char fstype[32];
-    char target_path[256];
-
-    // ptrace相关字段
-    u32 target_pid;
-    u64 request_raw; // 使用 u64 保留完整的原始值
+    u32 event_type;  u32 pid;  u32 uid;
+    char comm[16];   char container_id[64];
+    char fstype[32]; char target_path[256];  // mount/openat 共用
+    u32 target_pid;  u64 request_raw;        // ptrace 专用
 };
 
-// 容器ID结构体
-struct container_id_t {
-    char id[64];
-};
-
-// Ring Buffer声明
-BPF_RINGBUF_OUTPUT(events, 1 << 8);
-
-// Hash Map声明
-BPF_HASH(container_map, u32, struct container_id_t);
-
-// 获取容器ID辅助函数
-static inline void get_container_id(struct event *evt) {
-    u32 pid = evt->pid;
-    struct container_id_t *cid = container_map.lookup(&pid);
-    if (cid) {
-        bpf_probe_read_str(evt->container_id, sizeof(evt->container_id), cid->id);
-    } else {
-        // 默认标记为宿主机
-        evt->container_id[0] = 'h';
-        evt->container_id[1] = 'o';
-        evt->container_id[2] = 's';
-        evt->container_id[3] = 't';
-        evt->container_id[4] = '\0';
-    }
-}
-
-// ==========================================
-// 监控 mount 系统调用 (使用 tracepoint)
-// ==========================================
+// mount 探针：捕获 fstype 和 target_path
 TRACEPOINT_PROBE(syscalls, sys_enter_mount) {
-    struct event evt = {};
-    evt.event_type = EVENT_MOUNT;
-    evt.pid = bpf_get_current_pid_tgid() >> 32;
-    evt.uid = bpf_get_current_uid_gid();
-    bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
-
-    // 从用户态指针读取字符串
-    bpf_probe_read_user_str(&evt.fstype, sizeof(evt.fstype), (void *)args->type);
-    bpf_probe_read_user_str(&evt.target_path, sizeof(evt.target_path), (void *)args->dir_name);
-
-    get_container_id(&evt);
+    bpf_probe_read_user_str(&evt.fstype, ..., args->type);
+    bpf_probe_read_user_str(&evt.target_path, ..., args->dir_name);
     events.ringbuf_output(&evt, sizeof(evt), 0);
-    return 0;
 }
 
-// ==========================================
-// 监控 ptrace 系统调用（改用 tracepoint）
-// ==========================================
+// ptrace 探针：保留完整 64 位 request（不截断，方便调试）
 TRACEPOINT_PROBE(syscalls, sys_enter_ptrace) {
-    struct event evt = {};
-    evt.event_type = EVENT_PTRACE;
-    evt.pid = bpf_get_current_pid_tgid() >> 32;
-    evt.uid = bpf_get_current_uid_gid();
-    bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
-
-    // 🔥 关键修正：直接将完整的 64 位 request 值传回用户态，不做任何掩码处理，方便调试
-    evt.request_raw = (u64)args->request;
+    evt.request_raw = (u64)args->request;   // 如 0x420e = PTRACE_GET_SYSCALL_INFO
     evt.target_pid = (u32)args->pid;
-
-    get_container_id(&evt);
     events.ringbuf_output(&evt, sizeof(evt), 0);
-    return 0;
 }
 
-// ==========================================
-// 监控 openat 系统调用（改用 tracepoint）
-// ==========================================
-// TRACEPOINT_PROBE(syscalls, sys_enter_openat) {
-//     struct event evt = {};
-//     evt.event_type = EVENT_OPENAT;
-//     evt.pid = bpf_get_current_pid_tgid() >> 32;
-//     evt.uid = bpf_get_current_uid_gid();
-//     bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
-    
-//     // 读取文件路径
-//     bpf_probe_read_user_str(&evt.target_path, sizeof(evt.target_path), (void *)args->filename);
-    
-//     get_container_id(&evt);
-//     events.ringbuf_output(&evt, sizeof(evt), 0);
-//     return 0;
-// }
+// openat 探针：⚠️ 当前已注释（高频调用导致 Ring Buffer 溢出）
+// TRACEPOINT_PROBE(syscalls, sys_enter_openat) { ... }
 ```
+
+> 📄 完整代码: [`code/08-detection/escape-detect.c`](../code/08-detection/escape-detect.c)（含容器ID获取辅助函数、Ring Buffer / Hash Map 声明）
 
 ### **4.3 测试脚本**
 

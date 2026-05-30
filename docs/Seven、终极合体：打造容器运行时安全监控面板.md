@@ -55,125 +55,37 @@ date: 2026.5.28
 
 为了简化加载逻辑，我们把所有探针逻辑写在一个 C 文件里，用尾调用分发。
 
-`container-tail.c`：
+`container-tail.c` 的核心思路如下（完整代码见 [`code/07-monitor/container-tail.c`](../code/07-monitor/container-tail.c)）：
 
 ```c
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
-#include <net/sock.h>
+// container-tail.c — 尾调用架构（概念验证，实际踩坑）
+// 核心设计：入口探针只做分发，具体逻辑由尾调用跳转到子函数
 
-// 1. 容器身份映射表 (与第六篇一致)
-struct container_info {
-    char name[64];
-};
-BPF_HASH(container_map, u64, struct container_info);
-
-// 2. 尾调用映射表
-BPF_PROG_ARRAY(prog_array, 10);
-
-// 3. 统一事件结构体 (用枚举区分类型)
-enum event_type { EVENT_EXECVE = 1, EVENT_OPENAT = 2, EVENT_CONNECT = 3 };
-
-struct data_t {
-    u32 pid;
-    u32 uid;
-    u64 cgroup_id;
-    char container_name[64];
-    enum event_type type;
-
-    // 联合体节省内存，每次只传一种数据
-    union {
-        char filename[128];     // for execve & openat
-        u32 daddr;              // for connect
-        u16 dport;              // for connect
-    } data;
-};
-
-BPF_PERF_OUTPUT(events);
-
-// 4. 公共函数：打容器标签
+// 公共函数：给事件打容器标签
 static inline void fill_container_info(struct data_t *data) {
     data->cgroup_id = bpf_get_current_cgroup_id();
     struct container_info *info = container_map.lookup(&data->cgroup_id);
-    if (info) {
-        bpf_probe_read_kernel_str(&data->container_name, sizeof(data->container_name), info->name);
-    } else {
-        char host[] = "[HOST]";
-        bpf_probe_read_kernel_str(&data->container_name, sizeof(host), host);
-    }
+    if (info) { /* 容器进程 */ }
+    else      { /* 宿主机进程 → [HOST] */ }
 }
 
-// 5. Entry 探针：只做分发
+// 入口探针：只拿 cgroup_id，然后尾调用跳转
 TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
     struct data_t data = {};
     data.type = EVENT_EXECVE;
-    // 尾调用跳转到具体处理器，索引为 1
-    prog_array.call(data, 1);
+    prog_array.call(ctx, 1);   // 尾调用 → handle_execve
     return 0;
 }
 
-TRACEPOINT_PROBE(syscalls, sys_enter_openat) {
-    struct data_t data = {};
-    data.type = EVENT_OPENAT;
-    prog_array.call(data, 2);
-    return 0;
-}
-
-TRACEPOINT_PROBE(syscalls, sys_enter_connect) {
-    struct data_t data = {};
-    data.type = EVENT_CONNECT;
-    prog_array.call(data, 3);
-    return 0;
-}
-
-// 6. 具体处理器 (注意 BCC 的尾调用处理方式)
-PROBE_INDEX(1) // 对应 execve
+// 子函数：具体处理逻辑
+PROBE_INDEX(1)
 int handle_execve(struct pt_regs *ctx) {
-    struct data_t data = {};
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
-    data.type = EVENT_EXECVE;
-    fill_container_info(&data);
-
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-    bpf_probe_read_user_str(&data.data.filename, sizeof(data.data.filename), (void *)ctx->si);
-
-    events.perf_submit(ctx, &data, sizeof(data));
-    return 0;
-}
-
-PROBE_INDEX(2) // 对应 openat
-int handle_openat(struct pt_regs *ctx) {
-    struct data_t data = {};
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
-    data.type = EVENT_OPENAT;
-    fill_container_info(&data);
-
-    bpf_probe_read_user_str(&data.data.filename, sizeof(data.data.filename), (void *)ctx->si);
-
-    events.perf_submit(ctx, &data, sizeof(data));
-    return 0;
-}
-
-PROBE_INDEX(3) // 对应 connect
-int handle_connect(struct pt_regs *ctx) {
-    struct data_t data = {};
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
-    data.type = EVENT_CONNECT;
-    fill_container_info(&data);
-
-    struct sock *sk = (struct sock *)ctx->di;
-    struct sockaddr_in *sin = (struct sockaddr_in *)ctx->si;
-
-    bpf_probe_read_kernel(&data.data.daddr, sizeof(data.data.daddr), &sin->sin_addr.s_addr);
-    bpf_probe_read_kernel(&data.data.dport, sizeof(data.data.dport), &sin->sin_port);
-
-    events.perf_submit(ctx, &data, sizeof(data));
-    return 0;
+    // 从 ctx 寄存器提取参数，填充事件结构体
+    // events.perf_submit(ctx, &data, sizeof(data));
 }
 ```
+
+> ⚠️ 这个架构在 BCC 环境下运行时遭遇了编译错误（`prog_array.call()` 参数类型不兼容、`PROBE_INDEX` 宏缺失等），最终被放弃。详见下文 2.2 节的填坑分析。
 
 **预期很丰满，现实很骨感。** 运行时直接遭遇了 BCC 的编译报错：
 
@@ -201,299 +113,76 @@ PROBE_INDEX(1) // 对应 execve
 
 在安全监控场景下，系统调用的频率（每秒几千次）远未达到内核瓶颈。平铺和尾调用的性能差异几乎测不出来，但代码可读性和开发效率却天差地别。
 
-`container-monitor.c` ：
+`container-monitor.c` 的核心结构如下（完整代码见 [`code/07-monitor/container-monitor.c`](../code/07-monitor/container-monitor.c)）：
 
 ```c
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
-#include <net/sock.h>
-
-// 1. 容器身份映射表 (与第六篇一致)
-struct container_info {
-    char name[64];
-};
-BPF_HASH(container_map, u64, struct container_info);
-
-// 2. 统一事件结构体 (用枚举区分类型)
-enum event_type {
-    EVENT_EXECVE = 1,
-    EVENT_OPENAT = 2,
-    EVENT_CONNECT = 3
-};
+// container-monitor.c — 多探针平铺架构（最终采用方案）
+// 对比 container-tail.c：放弃尾调用，每个探针直接写完整逻辑
 
 struct data_t {
-    u32 pid;
-    u32 uid;
-    u64 cgroup_id;
-    char container_name[64];
-    enum event_type type;
-    char comm[16];
-    // 联合体节省内存，每次只传一种数据
-    union {
-        char filename[128]; // for execve & openat
-        u32 daddr;          // for connect
-        u16 dport;          // for connect
-    } data;
+    u32 pid;  u32 uid;  u64 cgroup_id;
+    char container_name[64];  enum event_type type;  char comm[16];
+    union { char filename[128]; u32 daddr; u16 dport; } data;
 };
 
-BPF_PERF_OUTPUT(events);
+// 公共函数：查 cgroup_id → 映射表 → 打容器标签
+static inline void fill_container_info(struct data_t *data) { /* ... */ }
 
-// 3. 公共函数：打容器标签
-static inline void fill_container_info(struct data_t *data)
-{
-    data->cgroup_id = bpf_get_current_cgroup_id();
-    struct container_info *info = container_map.lookup(&data->cgroup_id);
-    if (info) {
-        bpf_probe_read_kernel_str(&data->container_name, sizeof(data->container_name), info->name);
-    } else {
-        char host[] = "[HOST]";
-        bpf_probe_read_kernel_str(&data->container_name, sizeof(host), host);
-    }
+// 三个探针平铺——各自独立实现，不通过尾调用分发
+TRACEPOINT_PROBE(syscalls, sys_enter_execve)  { /* execve 处理 */ }
+TRACEPOINT_PROBE(syscalls, sys_enter_openat)  {
+    // 🔥 内核态过滤：宿主机 openat 直接丢弃，只有容器事件才上报
+    if (data.container_name[0] == '[') return 0;  // 跳过 [HOST]
+    /* ... */
 }
-
-// ========================================================
-// 4. 平铺版：直接在探针里处理逻辑，不用尾调用！
-// ========================================================
-
-TRACEPOINT_PROBE(syscalls, sys_enter_execve)
-{
-    struct data_t data = {};
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
-    data.type = EVENT_EXECVE;
-    fill_container_info(&data);
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-
-    // HOST execve 保留（低频，安全相关）
-    // 容器 execve 也保留
-
-    bpf_probe_read_user_str(&data.data.filename, sizeof(data.data.filename), (void *)args->filename);
-    events.perf_submit(args, &data, sizeof(data));
-    return 0;
-}
-
-TRACEPOINT_PROBE(syscalls, sys_enter_openat)
-{
-    struct data_t data = {};
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
-    data.type = EVENT_OPENAT;
-    fill_container_info(&data);
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-
-    // 内核态过滤：HOST 的 openat 直接丢弃！
-    // HOST openat 每秒数万次，是 Perf Buffer 溢出的元凶
-    // container_name[0]=='[' 说明是 "[HOST]"，不是容器名
-    if (data.container_name[0] == '[') {
-        return 0;
-    }
-
-    bpf_probe_read_user_str(&data.data.filename, sizeof(data.data.filename), (void *)args->filename);
-    events.perf_submit(args, &data, sizeof(data));
-    return 0;
-}
-
-TRACEPOINT_PROBE(syscalls, sys_enter_connect)
-{
-    struct data_t data = {};
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.uid = bpf_get_current_uid_gid() >> 32;
-    data.type = EVENT_CONNECT;
-    fill_container_info(&data);
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-
-    // 内核态过滤：HOST 的 connect 也直接丢弃！
-    if (data.container_name[0] == '[') {
-        return 0;
-    }
-
-    struct sockaddr_in sin = {};
-    bpf_probe_read_user(&sin, sizeof(sin), (void *)args->uservaddr);
-    data.data.daddr = sin.sin_addr.s_addr;
-    data.data.dport = sin.sin_port;
-    events.perf_submit(args, &data, sizeof(data));
-    return 0;
-}
-
+TRACEPOINT_PROBE(syscalls, sys_enter_connect) { /* connect 处理 */ }
 ```
+
+> 💡 放弃尾调用的原因：BCC 的 `prog_array.call()` 在 tracepoint 场景下传参受限 + `PROBE_INDEX` 宏缺失。平铺方案虽然代码重复，但可读性和稳定性远优于尾调用，且性能差异在实际场景中测不出来。
 
 ## 三、动态生命线：基于 Docker Event 的映射表热更新
 
 这是本篇最核心的 Python 代码。我们用后台线程监听 Docker 事件，实现映射表的**增删改**。
 
-`container-monitor.py`：
+`container-monitor.py` 的核心逻辑如下（完整代码见 [`code/07-monitor/container-monitor.py`](../code/07-monitor/container-monitor.py)）：
 
 ```python
 #!/usr/bin/python3
-from bcc import BPF
-import docker
-import os
-import ctypes as ct
-import threading
-import time
-from socket import htons
+# container-monitor.py — 容器运行时安全监控面板
 
-# ==================== 0. ctypes 结构体定义 ====================
+# ============ 0. ctypes 结构体（与 C 代码精确对齐）============
 class ContainerInfo(ct.Structure):
     _fields_ = [("name", ct.c_char * 64)]
 
-class DataUnion(ct.Union):
-    _fields_ = [
-        ("filename", ct.c_char * 128),
-        ("daddr", ct.c_uint32),
-        ("dport", ct.c_uint16)
-    ]
-
 class DataT(ct.Structure):
     _fields_ = [
-        ("pid", ct.c_uint32),
-        ("uid", ct.c_uint32),
-        ("cgroup_id", ct.c_uint64),
-        ("container_name", ct.c_char * 64),
-        ("type", ct.c_uint32),
-        ("comm", ct.c_char * 16),
-        ("data", DataUnion)
+        ("pid", ct.c_uint32), ("uid", ct.c_uint32),
+        ("cgroup_id", ct.c_uint64), ("container_name", ct.c_char * 64),
+        ("type", ct.c_uint32), ("comm", ct.c_char * 16),
+        ("data", DataUnion)  # filename / daddr+dport
     ]
 
-# ==================== 1. 加载 eBPF 程序 ====================
-b = BPF(src_file="container-monitor.c")
-
-# ==================== 2. 映射表操作 ====================
-def add_container_to_map(container, max_retries=10, interval=0.5):
-    long_id = container.id
-    name = container.name
-    cgroup_path = f"/sys/fs/cgroup/system.slice/docker-{long_id}.scope"
-
-    for attempt in range(max_retries):
-        if os.path.exists(cgroup_path):
-            break
-        if attempt < max_retries - 1:
-            print(f"\033[93m[Retry] 等待 cgroup 就绪: {name} (第{attempt+1}次)\033[0m")
-            time.sleep(interval)
-    else:
-        print(f"\033[91m[Error] cgroup 路径不存在: {cgroup_path}，映射添加失败！\033[0m")
-        return
-
+# ============ 1. 映射表操作 ============
+def add_container_to_map(container):
+    cgroup_path = f"/sys/fs/cgroup/system.slice/docker-{container.id}.scope"
     inode = os.stat(cgroup_path).st_ino
-    key = ct.c_uint64(inode)
-    value = ContainerInfo()
-    value.name = name.encode('utf-8')
-    b["container_map"][key] = value
-    print(f"\033[92m[Sync+] 容器启动: {name} -> inode {inode} (0x{inode:x})\033[0m")
+    b["container_map"][ct.c_uint64(inode)] = name  # 写入 eBPF Map
 
-def del_container_by_name(name):
-    deleted = False
-    for key in list(b["container_map"].keys()):
-        val = b["container_map"].get(key)
-        if val is None:
-            continue
-        try:
-            val_name = bytes(val.name).split(b'\x00')[0].decode('utf-8')
-        except Exception:
-            continue
-        if val_name == name:
-            del b["container_map"][key]
-            print(f"\033[91m[Sync-] 容器停止: {name} -> inode {key.value} (0x{key.value:x})\033[0m")
-            deleted = True
-            break
-    return deleted
-
-# ==================== 3. 启动时全量同步 ====================
-def sync_container_map():
-    client = docker.from_env()
-    for container in client.containers.list():
-        long_id = container.id
-        name = container.name
-        cgroup_path = f"/sys/fs/cgroup/system.slice/docker-{long_id}.scope"
-        if not os.path.exists(cgroup_path):
-            continue
-        inode = os.stat(cgroup_path).st_ino
-        key = ct.c_uint64(inode)
-        value = ContainerInfo()
-        value.name = name.encode('utf-8')
-        b["container_map"][key] = value
-        print(f"\033[92m[Sync] {name} -> inode {inode} (0x{inode:x})\033[0m")
-
-# ==================== 4. 后台线程：监听 Docker Event ====================
+# ============ 2. 后台线程：监听 Docker Event ============
 def listen_docker_events():
-    client = docker.from_env()
-    print("[*] 开始监听 Docker 事件...")
+    """容器启停时动态更新映射表，解决 PID 过期问题"""
     for event in client.events(decode=True):
-        if event.get('Type') != 'container':
-            continue
+        if status == 'start':  add_container_to_map(...)
+        elif status == 'die':  del_container_by_name(...)
 
-        # 关键修复：兼容不同 docker-py / API 版本（status vs Action）
-        status = event.get('status') or event.get('Action')
-        if not status:
-            continue
-
-        actor = event.get('Actor', {})
-        cid = actor.get('ID', '')
-        attrs = actor.get('Attributes', {})
-        name = attrs.get('name', 'unknown')
-
-        if status in ('start', 'restart'):
-            try:
-                container = client.containers.get(cid)
-                add_container_to_map(container)
-            except Exception as e:
-                print(f"\033[91m[Error] 处理 {status} 事件失败 ({name}): {e}\033[0m")
-
-        elif status in ('die', 'destroy', 'stop'):
-            del_container_by_name(name)
-
-# ==================== 5. 启动 ====================
-sync_container_map()
-event_thread = threading.Thread(target=listen_docker_events, daemon=True)
-event_thread.start()
-
-# ==================== 6. 面板输出 ====================
-EVENT_EXECVE = 1
-EVENT_OPENAT = 2
-EVENT_CONNECT = 3
-
-def ip_int_to_str(ip_int):
-    return f"{(ip_int>>24)&0xFF}.{(ip_int>>16)&0xFF}.{(ip_int>>8)&0xFF}.{ip_int&0xFF}"
-
+# ============ 3. 面板输出 ============
 def print_event(cpu, data, size):
-    event = ct.cast(data, ct.POINTER(DataT)).contents
-    try:
-        cg_name = event.container_name.decode()
-        if cg_name != "[HOST]":
-            cg_color = "\033[92m"
-        else:
-            cg_color = "\033[94m"
-        base_info = f"{cg_color}{cg_name:16s}\033[0m PID={event.pid:6d} UID={event.uid:5d}"
-
-        if event.type == EVENT_EXECVE:
-            cmd = event.data.filename.decode('utf-8', errors='ignore')
-            cmd_name = cmd.split('/')[-1]
-            if cmd_name in ['nc', 'curl', 'wget', 'nmap', 'chmod']:
-                print(f"{base_info} \033[91mCOMM={event.comm.decode('utf-8', errors='ignore'):16s} → CMD={cmd} ⚠️ SUSPICIOUS\033[0m")
-            else:
-                print(f"{base_info} COMM={event.comm.decode('utf-8', errors='ignore'):16s} → CMD={cmd}")
-        elif event.type == EVENT_OPENAT:
-            path = event.data.filename.decode('utf-8', errors='ignore')
-            if any(x in path for x in ['shadow', 'passwd', 'id_rsa', 'kcore']):
-                print(f"{base_info} \033[91mCOMM={event.comm.decode('utf-8', errors='ignore'):16s} → OPEN={path} ⚠️ SENSITIVE\033[0m")
-            else:
-                print(f"{base_info} COMM={event.comm.decode('utf-8', errors='ignore'):16s} → OPEN={path}")
-        elif event.type == EVENT_CONNECT:
-            daddr = ip_int_to_str(event.data.daddr)
-            dport = htons(event.data.dport)
-            print(f"{base_info} COMM={event.comm.decode('utf-8', errors='ignore'):16s} → CONNECT={daddr}:{dport}")
-    except Exception as e:
-        print(f"\033[91m[Error] 解析事件失败: {e}\033[0m")
-
-b["events"].open_perf_buffer(print_event)
-print("\n🛡️ 容器运行时安全监控已启动，按 Ctrl-C 停止")
-print("="*60)
-while True:
-    try:
-        b.perf_buffer_poll()
-    except KeyboardInterrupt:
-        exit()
+    """根据 event.type 彩色打印：execve / openat / connect，敏感操作标红"""
+    # 如: cat /etc/shadow → ⚠️ SENSITIVE
+    # 如: curl/nc/nmap → ⚠️ SUSPICIOUS
 ```
+
+> 📄 完整代码见 [`code/07-monitor/container-monitor.py`](../code/07-monitor/container-monitor.py)（~500 行，含 Docker Event 线程、ctypes 结构体对齐、彩色面板输出等完整实现）
 
 ## 四、攻防演练：动态捕获异常
 

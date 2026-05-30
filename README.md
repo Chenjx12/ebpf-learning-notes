@@ -32,6 +32,7 @@
 | [Six](./docs/Six、容器感知与身份识别：从内核到云原生.md)       | **容器感知**    | **Namespace、Cgroup、容器身份识别**                            |
 | [Seven](./docs/Seven、终极合体：打造容器运行时安全监控面板.md) | **监控面板**    | **多探针整合、动态映射、完整监控系统**                         |
 | [Eight](./docs/Eight、从监控到检测——构建容器逃逸规则引擎.md)   | **规则引擎**    | **YAML配置、三维检测模型(procfs挂载/ptrace注入/敏感文件访问)** |
+| [Nine](./docs/Nine、主动防御：从检测到自动响应.md)             | **主动防御**    | **Docker响应引擎、pause/disconnect、bpf_send_signal**          |
 
 ### 辅助文档
 
@@ -106,7 +107,23 @@ bash code/08-detection/test-ptrace.sh
 # 4）敏感文件访问测试（可选，当前已注释openat事件输出）
 # bash code/08-detection/test-openat.sh
 
-```
+
+# 主动防御示例（第九篇）[code/09-response](./code/09-response) (检测+响应闭环)
+# 1）安装依赖
+pip3 install docker pyyaml
+
+# 2）准备测试容器（使用现有的 ptrace-test）
+docker start ptrace-test
+
+# 3）启动主动防御系统
+sudo python3 code/09-response/escape-respond.py -r code/09-response/rules.yaml -s code/09-response/responses.yaml
+
+# 4）新开终端执行ptrace注入测试（会触发自动断网隔离）
+bash code/09-response/test-ptrace-simple.sh
+
+# 5）验证容器网络是否被断开
+docker inspect ptrace-test | grep Networks
+
 
 ### 环境搭建脚本
 
@@ -165,6 +182,13 @@ ebpf-learning-notes/
         ├── test-escape.sh         # ⭐⭐⭐ [procfs挂载测试](./code/08-detection/test-escape.sh)
         ├── test-ptrace.sh         # ⭐⭐⭐⭐ [ptrace注入测试](./code/08-detection/test-ptrace.sh)
         └── test-openat.sh         # ⭐⭐ [敏感文件访问测试(已注释)](./code/08-detection/test-openat.sh)
+    └── 09-response/       # 第九篇:主动防御
+        ├── escape-respond.py      # ⭐⭐⭐⭐⭐ [检测+响应主程序](./code/09-response/escape-respond.py)
+        ├── responder.py           # ⭐⭐⭐⭐ [响应引擎实现](./code/09-response/responder.py)
+        ├── responses.yaml         # ⭐⭐⭐ [响应策略配置](./code/09-response/responses.yaml)
+        ├── docker-compose.yml     # ⭐⭐⭐⭐ [攻防靶场编排](./code/09-response/docker-compose.yml)
+        ├── test-escape.sh         # ⭐⭐⭐ [procfs挂载测试](./code/09-response/test-escape.sh)
+        └── test-ptrace.sh         # ⭐⭐⭐⭐ [ptrace注入测试](./code/09-response/test-ptrace.sh)
 ```
 
 ## Star History
