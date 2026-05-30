@@ -36,6 +36,7 @@ if matched_rules:
 ```
 
 **问题:**
+
 - ❌ 告警后攻击者仍在容器内继续操作
 - ❌ 需要人工介入才能隔离/杀死容器
 - ❌ 无法实现实时阻断和自动化处置
@@ -64,6 +65,7 @@ if matched_rules:
 ```
 
 **优势:**
+
 - ✅ 毫秒级自动响应,无需人工介入
 - ✅ 分级处置策略(CRITICAL → 立即冻结, HIGH → 断网隔离)
 - ✅ 保留现场用于取证(pause 而非直接 kill)
@@ -80,32 +82,33 @@ if matched_rules:
 ```yaml
 responses:
   - threat_level: critical
-    action: pause_container        # 冻结容器,保留内存现场
+    action: pause_container # 冻结容器,保留内存现场
     description: "立即冻结高危容器,等待人工取证"
-    
+
   - threat_level: high
-    action: isolate_network        # 断网隔离
+    action: isolate_network # 断网隔离
     description: "切断容器网络连接,防止横向移动"
-    
+
   - threat_level: medium
-    action: kill_process           # 仅杀进程
+    action: kill_process # 仅杀进程
     description: "终止可疑进程,但不影响容器其他服务"
-    
+
   - threat_level: low
-    action: log_only               # 仅记录
+    action: log_only # 仅记录
     description: "写入审计日志,不执行自动处置"
 ```
 
 ### **2.2 威胁等级与响应动作映射**
 
-| 威胁等级 | 触发条件示例 | 自动响应动作 | 是否需要人工复核 |
-|---------|------------|------------|----------------|
-| **CRITICAL** | procfs 挂载逃逸 + ptrace 注入 | 立即冻结容器 (docker pause) | 必须,取证后决定下一步 |
-| **HIGH** | 单一 ptrace 对 PID 1 | 断网隔离 (docker network disconnect) | 建议复核 |
-| **MEDIUM** | 敏感文件访问 (/etc/shadow) | 终止进程 (kill) | 可选 |
-| **LOW** | 异常命令执行 | 仅告警 + 记录日志 | 不需要 |
+| 威胁等级     | 触发条件示例                  | 自动响应动作                         | 是否需要人工复核      |
+| ------------ | ----------------------------- | ------------------------------------ | --------------------- |
+| **CRITICAL** | procfs 挂载逃逸 + ptrace 注入 | 立即冻结容器 (docker pause)          | 必须,取证后决定下一步 |
+| **HIGH**     | 单一 ptrace 对 PID 1          | 断网隔离 (docker network disconnect) | 建议复核              |
+| **MEDIUM**   | 敏感文件访问 (/etc/shadow)    | 终止进程 (kill)                      | 可选                  |
+| **LOW**      | 异常命令执行                  | 仅告警 + 记录日志                    | 不需要                |
 
 **设计原则:**
+
 - **CRITICAL**: 多规则同时命中 → 确信度极高 → 立即冻结保留现场
 - **HIGH**: 单一致命行为 → 高置信度 → 断网阻止进一步动作
 - **MEDIUM**: 单一可疑行为 → 中等置信度 → 精准打击单个进程
@@ -125,7 +128,7 @@ responses:
 
 class ResponseEngine:
     """基于威胁等级的自动响应：pause → isolate → kill → log"""
-    
+
     def __init__(self, responses_file):
         self.policy = {r['threat_level']: r['action'] for r in config}
         self.cooldown = {}     # 10分钟冷却，防止重复处置
@@ -211,11 +214,13 @@ TRACEPOINT_PROBE(syscalls, sys_enter_mount) {
 解决方式：**让 eBPF 内核态在事件发生瞬间就记录 `bpf_get_current_cgroup_id()`**。用户态启动时构建 `cgroup_inode → container_id` 映射表，事件处理时直接用内核态记录的 inode 反查，零竞态。
 
 **关键点:**
+
 - `bpf_send_signal(sig)` 会对**当前执行系统调用的进程**发送信号
 - 在内核态直接拦截,延迟极低(微秒级)
 - 但要注意:这会导致进程立即终止,无法保留完整现场
 
 **使用建议:**
+
 - 仅在 CRITICAL 级别且确信度极高时使用
 - 配合容器级 pause 形成双重保障
 
@@ -388,24 +393,24 @@ bash test-openat.sh
 
 ### **5.6 验证响应动作的防护效果**
 
-| 告警类型 | 响应动作 | 验证方法 |
-|---------|---------|---------|
-| CRITICAL (procfs挂载) | `pause_container` | `docker inspect escape_test --format '{{.State.Status}}'` → `paused` |
-| HIGH (ptrace注入) | `isolate_network` | `docker inspect ptrace-test --format '{{json .NetworkSettings.Networks}}'` → `{}` |
-| MEDIUM (敏感文件) | `kill_process` | 容器内 `ps aux` 确认恶意进程已消失 |
-| LOW | `log_only` | `cat audit.log` 查看 JSON 审计记录 |
+| 告警类型              | 响应动作          | 验证方法                                                                          |
+| --------------------- | ----------------- | --------------------------------------------------------------------------------- |
+| CRITICAL (procfs挂载) | `pause_container` | `docker inspect escape_test --format '{{.State.Status}}'` → `paused`              |
+| HIGH (ptrace注入)     | `isolate_network` | `docker inspect ptrace-test --format '{{json .NetworkSettings.Networks}}'` → `{}` |
+| MEDIUM (敏感文件)     | `kill_process`    | 容器内 `ps aux` 确认恶意进程已消失                                                |
+| LOW                   | `log_only`        | `cat audit.log` 查看 JSON 审计记录                                                |
 
 ### **5.7 测试结果与已知限制**
 
 在 Ubuntu 22.04 (kernel 6.8.0) + VMware 虚拟机环境下验证：
 
-| 验证项 | 结果 | 说明 |
-|--------|------|------|
-| eBPF 编译加载 | ✅ | 3 个 tracepoint 探针全部成功 |
-| 事件捕获 | ✅ | ptrace/mount 事件正常接收 |
-| 规则引擎匹配 | ✅ | `procfs_mount_escape` 和 `dangerous_ptrace` 均能触发 |
-| cgroup 容器识别 | ✅ | 用户态 `cgroup_id → container_id` 映射生效 |
-| 响应引擎分流 | ✅ | 宿主机事件正确跳过，不误杀 |
+| 验证项          | 结果 | 说明                                                 |
+| --------------- | ---- | ---------------------------------------------------- |
+| eBPF 编译加载   | ✅   | 3 个 tracepoint 探针全部成功                         |
+| 事件捕获        | ✅   | ptrace/mount 事件正常接收                            |
+| 规则引擎匹配    | ✅   | `procfs_mount_escape` 和 `dangerous_ptrace` 均能触发 |
+| cgroup 容器识别 | ✅   | 用户态 `cgroup_id → container_id` 映射生效           |
+| 响应引擎分流    | ✅   | 宿主机事件正确跳过，不误杀                           |
 
 **已知限制**（非代码问题，属环境差异）：
 
@@ -413,7 +418,7 @@ bash test-openat.sh
 2. **ptrace 到 PID 1 权限不足**：即使有 `--pid=host` + `CAP_SYS_PTRACE`，`ptrace_scope=1` 会阻止对 systemd 的附加。测试时需要 `echo 0 > /proc/sys/kernel/yama/ptrace_scope`。
 3. **openat Ring Buffer 溢出**：256 条目的 Ring Buffer 在面对 openat 洪水时严重不足，属于第八篇中已说明的已知问题，未来通过内核态过滤解决。
 
-> 💡 同一套代码在 kernel 5.15（如标准 Ubuntu 22.04 初始内核）上可以触发完整的"容器 mount → CRITICAL 告警 → pause_container"闭环。用户在其他机器上已验证第八篇的完整流程。
+> 💡 同一套代码在 kernel 5.15（如标准 Ubuntu 22.04 初始内核）上可以触发完整的"容器 mount → CRITICAL 告警 → pause_container"闭环。见第八篇的完整流程。
 
 ---
 
@@ -424,17 +429,20 @@ bash test-openat.sh
 在设计主动防御系统时,必须明确:
 
 **我们做的主动防御 = 阻断 + 隔离 + 取证 + 告警**
+
 - ✅ 冻结自己的容器(企业资产)
 - ✅ 断开可疑容器的网络
 - ✅ 终止恶意进程
 - ✅ 记录审计日志
 
 **我们不做的"反击" = 主动攻击攻击者**
+
 - ❌ 反向入侵攻击者机器
 - ❌ 向攻击者发送恶意 payload
 - ❌ 追踪攻击者真实身份(这是执法部门的事)
 
 **原因:**
+
 - 法律风险:"反击"可能触犯《网络安全法》
 - 技术风险:可能误判(告警来源可能是内部测试)
 - 责任问题:企业安全团队的职责是保护资产,不是执法
@@ -449,31 +457,36 @@ volumes:
 ```
 
 **风险:**
+
 - 如果攻击者反杀 defender 容器,就能完全控制宿主机 Docker
 - 可以创建新的特权容器、读取所有容器数据
 
 **缓解方案:**
+
 1. **最小权限原则**: 只读挂载(如果只需查询状态)
+
    ```yaml
    volumes:
      - /var/run/docker.sock:/var/run/docker.sock:ro
    ```
 
 2. **Docker Socket Proxy**: 使用 Tecnativa 的 socket-proxy 限制 API
+
    ```yaml
    services:
      docker-proxy:
        image: tecnativa/docker-socket-proxy
        environment:
-         CONTAINERS: 1  # 只允许容器相关API
-         EXEC: 0        # 禁止exec
-         POST: 0        # 禁止创建新容器
+         CONTAINERS: 1 # 只允许容器相关API
+         EXEC: 0 # 禁止exec
+         POST: 0 # 禁止创建新容器
    ```
 
 3. **白名单机制**: 只对关键容器执行自动响应
+
    ```python
    SAFE_CONTAINERS = ['database', 'redis', 'nginx']
-   
+
    def handle_alert(self, alert):
        container_name = alert['event'].get('container_name')
        if container_name in SAFE_CONTAINERS:
@@ -487,6 +500,7 @@ volumes:
 **问题:** 如果规则误报,自动响应可能会中断正常业务!
 
 **解决方案:**
+
 1. **分级响应**: LOW/MEDIUM 仅告警,CRITICAL/HIGH 才自动处置
 2. **人工确认开关**: 生产环境先打标记,人工确认后手动执行
 3. **冷却时间**: 同一容器 N 分钟内只执行一次自动响应
@@ -494,18 +508,18 @@ volumes:
    class ResponseEngine:
        def __init__(self):
            self.cooldown = {}  # container_id → last_response_time
-       
+
        def handle_alert(self, alert):
            container_id = alert['event']['container_id']
            now = time.time()
-           
+
            # 检查冷却时间
            if container_id in self.cooldown:
                last_time = self.cooldown[container_id]
                if now - last_time < 600:  # 10分钟冷却
                    print(f"[SKIP] 容器 {container_id[:12]} 在冷却期内")
                    return
-           
+
            # ... existing code: 执行响应 ...
            self.cooldown[container_id] = now
    ```
@@ -518,11 +532,11 @@ volumes:
 
 类比第八篇的"三维检测模型",响应也需要多维度覆盖:
 
-| 响应维度 | 覆盖场景 | 优势 | 局限性 |
-|---------|---------|------|--------|
-| **容器级** | pause/disconnect/kill | 彻底阻断,操作简单 | 影响整个容器(可能误杀正常服务) |
-| **进程级** | bpf_send_signal/kill | 精准打击,影响面小 | 需要PID准确,可能遗漏多线程攻击 |
-| **网络级** | XDP/TC丢包 | 阻止C2回连和横向移动 | 不影响本地文件系统操作 |
+| 响应维度   | 覆盖场景              | 优势                 | 局限性                         |
+| ---------- | --------------------- | -------------------- | ------------------------------ |
+| **容器级** | pause/disconnect/kill | 彻底阻断,操作简单    | 影响整个容器(可能误杀正常服务) |
+| **进程级** | bpf_send_signal/kill  | 精准打击,影响面小    | 需要PID准确,可能遗漏多线程攻击 |
+| **网络级** | XDP/TC丢包            | 阻止C2回连和横向移动 | 不影响本地文件系统操作         |
 
 **结论**: 必须组合使用多个响应维度,形成**纵深防御**,才能有效应对复杂攻击。
 
@@ -540,6 +554,7 @@ def pause_container(self, container_id):
 ```
 
 **典型场景:**
+
 - procfs 挂载逃逸 → 立即冻结,保留内存现场
 - ptrace 注入宿主机 → 冻结容器,防止进一步操作
 
@@ -553,6 +568,7 @@ if (is_critical_escape(&evt)) {
 ```
 
 **典型场景:**
+
 - 反弹 shell 瞬间 → 内核态直接掐断
 - 高频恶意系统调用 → 毫秒级拦截
 
@@ -566,17 +582,18 @@ SEC("xdp")
 int xdp_drop_malicious(struct xdp_md *ctx) {
     void *data = (void *)(long)ctx->data;
     struct ethhdr *eth = data;
-    
+
     // 检查是否为恶意IP或端口
     if (is_malicious_destination(eth)) {
         return XDP_DROP;  // 直接丢包
     }
-    
+
     return XDP_PASS;
 }
 ```
 
 **典型场景:**
+
 - 容器连接恶意 C2 服务器 → XDP 层丢包
 - 容器间横向扫描 → TC 层重定向到蜜罐
 
@@ -589,7 +606,7 @@ int xdp_drop_malicious(struct xdp_md *ctx) {
 - threat_level: medium
   action: limit_resources
   config:
-    cpu_quota: 50%      # 限制CPU使用率
+    cpu_quota: 50% # 限制CPU使用率
     memory_limit: 256MB # 限制内存上限
 
 # 扩展2: 通知集成
@@ -603,9 +620,9 @@ int xdp_drop_malicious(struct xdp_md *ctx) {
 - threat_level: critical
   action: capture_forensics
   config:
-    dump_memory: true          # 导出内存快照
-    save_logs: true            # 保存容器日志
-    snapshot_filesystem: true  # 快照文件系统
+    dump_memory: true # 导出内存快照
+    save_logs: true # 保存容器日志
+    snapshot_filesystem: true # 快照文件系统
 ```
 
 **核心思想**: 三维响应模型不是固定的,而是可以根据实际威胁情报动态调整的**活框架**。
@@ -625,7 +642,8 @@ int xdp_drop_malicious(struct xdp_md *ctx) {
 
 第八篇的 PID 映射表是静态的——`docker exec` 创建的新进程 PID 不在初始映射中。更致命的是，strace 这类进程在微秒级完成 ptrace 调用后就退出，用户态来不及读 `/proc/<pid>/cgroup`。
 
-**解决方案**: 
+**解决方案**:
+
 1. **内核态**：在 eBPF 事件结构体中新增 `u64 cgroup_id` 字段，通过 `bpf_get_current_cgroup_id()` 在事件发生瞬间记录
 2. **用户态**：启动时遍历 Docker 容器，构建 `cgroup_inode → container_id` 映射表（`stat` cgroup 目录获取 inode）
 3. **事件处理时**：PID 映射未命中 → 用内核态记录的 `cgroup_id` 反查 → 零竞态
@@ -647,6 +665,7 @@ eBPF 捕获的 `pid` 是**宿主机 PID**，不是容器内 PID。如果容器�
 ### **5. 内核版本差异**
 
 在 kernel 6.8.0 上测试发现：
+
 - 容器内 mount 调用可能不被 `sys_enter_mount` tracepoint 捕获（与 mount namespace 隔离有关）
 - `ptrace_scope=1` 会阻止对 systemd(PID 1)的附加，即使有 `CAP_SYS_PTRACE`
 - 同一套代码在 kernel 5.15（标准 Ubuntu 22.04 初始内核）上无此问题
