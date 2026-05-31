@@ -352,7 +352,7 @@ eBPF 程序通过 **ELF 段名** 来声明自己的类型和挂载点：
 
 ## 📚 7. 相关资源
 
-- [eBPF 程序剖析](../docs/Four、eBPF%20程序的解剖与工程化.md) - 第四篇文章
+- [eBPF 程序剖析](../../docs/One-实践/四、eBPF%20程序的解剖与工程化.md) - 第四篇文章
 - [bpftool 官方文档](https://man7.org/linux/man-pages/man8/bpftool.8.html)
 - [libbpf Documentation](https://libbpf.readthedocs.io/)
 

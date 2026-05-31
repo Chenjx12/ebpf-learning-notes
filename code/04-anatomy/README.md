@@ -2,7 +2,7 @@
 
 本目录包含第四篇文章相关的实验代码，重点展示 **手动编译 eBPF 程序** 和 **查看编译中间产物** 的过程。
 
-**对应笔记**: [Four、eBPF 程序的解剖与工程化](../docs/Four、eBPF%20程序的解剖与工程化.md)
+**对应笔记**: [Four、eBPF 程序的解剖与工程化](../../docs/One-实践/四、eBPF%20程序的解剖与工程化.md)
 
 ## 📂 文件列表
 
@@ -136,10 +136,10 @@ int hello(struct pt_regs *ctx) { ... }
 
 ## 📚 相关文档
 
-- **学习笔记**: [Four、eBPF 程序的解剖与工程化](../docs/Four、eBPF%20程序的解剖与工程化.md)
-- **第三篇笔记**: [Three、eBPF 的 Hello World](../docs/Three、eBPF%20的%20Hello%20%20World.md)
+- **学习笔记**: [Four、eBPF 程序的解剖与工程化](../../docs/One-实践/四、eBPF%20程序的解剖与工程化.md)
+- **第三篇笔记**: [Three、eBPF 的 Hello World](../../docs/One-实践/三、eBPF%20的%20Hello%20%20World.md)
 - **常见问题**: [FAQ](../FAQ.md)
-- **环境配置**: [项目环境](../docs/项目环境.md)
+- **环境配置**: [项目环境](../../docs/项目环境.md)
 - **基础示例**: [code/03-hello-world](../code/03-hello-world/)
 
 ---

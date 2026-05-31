@@ -1072,7 +1072,7 @@ sudo python3 hello-perf-plus.py
 
 **第五篇: eBPF 程序的拆分与组合** 已经发布! 🎉
 
-**对应笔记**: [Five、eBPF 程序的拆分与组合](./Five、eBPF%20程序的拆分与组合.md)  
+**对应笔记**: [Five、eBPF 程序的拆分与组合](./五、eBPF%20程序的拆分与组合.md)  
 **对应代码**: [`code/05-call/`](../code/05-call/)
 
 **核心内容:**
@@ -1091,9 +1091,9 @@ sudo python3 hello-perf-plus.py
 
 ## 🔗 相关链接
 
-- **上一篇**: [Three、eBPF 的 Hello World](./Three、eBPF%20的%20Hello%20%20World.md)
-- **下一篇**: [Five、eBPF 程序的拆分与组合](./Five、eBPF%20程序的拆分与组合.md)
-- **再下一篇**: [Six、容器感知与身份识别：从内核到云原生](./Six、容器感知与身份识别：从内核到云原生.md) - Namespace、Cgroup、容器身份识别
+- **上一篇**: [Three、eBPF 的 Hello World](./三、eBPF%20的%20Hello%20%20World.md)
+- **下一篇**: [Five、eBPF 程序的拆分与组合](./五、eBPF%20程序的拆分与组合.md)
+- **再下一篇**: [Six、容器感知与身份识别：从内核到云原生](./六、容器感知与身份识别：从内核到云原生.md) - Namespace、Cgroup、容器身份识别
 - **常见问题**: [FAQ](../FAQ.md) (包含程序卸载清理指南)
 - **第四篇代码**: [`code/04-anatomy/`](../code/04-anatomy/)
 - **第五篇代码**: [`code/05-call/`](../code/05-call/)
