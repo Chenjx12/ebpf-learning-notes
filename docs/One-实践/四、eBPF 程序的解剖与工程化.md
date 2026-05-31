@@ -1094,7 +1094,7 @@ sudo python3 hello-perf-plus.py
 - **上一篇**: [Three、eBPF 的 Hello World](./三、eBPF%20的%20Hello%20%20World.md)
 - **下一篇**: [Five、eBPF 程序的拆分与组合](./五、eBPF%20程序的拆分与组合.md)
 - **再下一篇**: [Six、容器感知与身份识别：从内核到云原生](./六、容器感知与身份识别：从内核到云原生.md) - Namespace、Cgroup、容器身份识别
-- **常见问题**: [FAQ](../FAQ.md) (包含程序卸载清理指南)
+- **常见问题**: [FAQ](../../FAQ.md) (包含程序卸载清理指南)
 - **第四篇代码**: [`code/04-anatomy/`](../code/04-anatomy/)
 - **第五篇代码**: [`code/05-call/`](../code/05-call/)
 - **第六篇代码**: [`code/06-container/`](../code/06-container/)

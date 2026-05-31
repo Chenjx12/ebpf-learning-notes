@@ -193,7 +193,7 @@ u64 bpf_get_current_cgroup_id(void);
 
 - **学习笔记**: [Six、容器感知与身份识别：从内核到云原生](../../docs/One-实践/六、容器感知与身份识别：从内核到云原生.md)
 - **第五篇笔记**: [Five、eBPF 程序的拆分与组合](../../docs/One-实践/五、eBPF%20程序的拆分与组合.md) (前置知识)
-- **常见问题**: [FAQ](../FAQ.md) (包含Namespace编译问题解答)
+- **常见问题**: [FAQ](../../FAQ.md) (包含Namespace编译问题解答)
 - **环境配置**: [项目环境](../../docs/项目环境.md)
 - **Docker环境**: [docker 容器环境准备](../../docs/docker%20容器环境准备.md)
 

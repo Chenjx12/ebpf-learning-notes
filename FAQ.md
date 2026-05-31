@@ -422,7 +422,7 @@ TRACEPOINT_PROBE(syscalls, sys_enter_mount) {
 
 ---
 
-### Q16: eBPF 程序卸载不掉怎么办?
+### Q14: eBPF 程序卸载不掉怎么办?
 
 **现象**: 
 
@@ -513,9 +513,7 @@ sudo reboot
 
 
 
-没问题！直接给你这两个新增的 FAQ 条目，你直接复制粘贴到 FAQ.md 的 🔧 调试相关 章节末尾就行：
-
-### Q18: 为什么编译报错 `no member named 'pid_ns' in 'struct bpf_pidns_info'`？
+### Q15: 为什么编译报错 `no member named 'pid_ns' in 'struct bpf_pidns_info'`？
 
 **现象**：
 
@@ -553,7 +551,7 @@ data.pid_ns_inum = inum;
 
 ---
 
-### Q19: 为什么编译报错 incomplete definition of type 'struct nsproxy'？
+### Q16: 为什么编译报错 incomplete definition of type 'struct nsproxy'？
 
 **现象**： 
 
@@ -579,7 +577,7 @@ data.pid_ns_inum = inum;
 
 ---
 
-### Q20: 为什么 client.events() 收不到 Docker 事件，eBPF 映射表热更新失效？
+### Q17: 为什么 client.events() 收不到 Docker 事件，eBPF 映射表热更新失效？
 
 **现象**：
 
@@ -666,7 +664,7 @@ def listen_docker_events():
 
 ---
 
-### Q21: 为什么容器内 `apt-get update` 报 DNS 解析失败，宿主机却有网？
+### Q18: 为什么容器内 `apt-get update` 报 DNS 解析失败，宿主机却有网？
 
 **现象**：
 
@@ -705,7 +703,7 @@ sudo systemctl restart docker
 
 ---
 
-### Q22: 为什么容器内 `strace -p 1` 报 Permission denied，即使加了 `--cap-add=SYS_PTRACE`？
+### Q19: 为什么容器内 `strace -p 1` 报 Permission denied，即使加了 `--cap-add=SYS_PTRACE`？
 
 **现象**：
 
@@ -740,7 +738,7 @@ echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
 
 ---
 
-### Q23: 为什么 `docker exec` 创建的进程，eBPF 探针有时捕获不到它的系统调用？
+### Q20: 为什么 `docker exec` 创建的进程，eBPF 探针有时捕获不到它的系统调用？
 
 **现象**：
 
@@ -772,7 +770,7 @@ docker exec --privileged test mount -t proc proc /tmp/test
 
 ---
 
-### Q24: Python 脚本用 `sudo python3 xxx.py > log.txt` 重定向输出，为什么日志文件长时间为空？
+### Q21: Python 脚本用 `sudo python3 xxx.py > log.txt` 重定向输出，为什么日志文件长时间为空？
 
 **现象**：
 
@@ -803,7 +801,7 @@ sudo stdbuf -oL python3 escape-respond.py > /tmp/log.txt 2>&1 &
 
 ---
 
-### Q25: 多个 eBPF 监控实例同时运行会导致什么问题？
+### Q22: 多个 eBPF 监控实例同时运行会导致什么问题？
 
 **现象**：
 
@@ -836,7 +834,7 @@ sudo bpftool prog list | grep "sys_enter"
 
 ---
 
-### Q26: 为什么告警显示"容器: host"，响应引擎跳过了本该响应的容器事件？
+### Q23: 为什么告警显示"容器: host"，响应引擎跳过了本该响应的容器事件？
 
 **现象**：
 
@@ -870,7 +868,7 @@ if raw_cid in ('host', '', 'unknown'):
 
 ## 📚 学习资源
 
-### Q14: 有哪些好的学习资源?
+### Q24: 有哪些好的学习资源?
 
 **官方文档**:
 - [eBPF.io](https://ebpf.io/) - 官方学习路径
@@ -894,7 +892,7 @@ if raw_cid in ('host', '', 'unknown'):
 
 ## 💡 其他
 
-### Q15: 如何贡献本项目?
+### Q25: 如何贡献本项目?
 
 欢迎提交 Issue 和 Pull Request!
 

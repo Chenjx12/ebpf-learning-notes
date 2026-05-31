@@ -134,7 +134,7 @@ CPU-0    [000] d...  Chain completed successfully!
 
 - **学习笔记**: [Five、eBPF 程序的拆分与组合](../../docs/One-实践/五、eBPF%20程序的拆分与组合.md)
 - **第四篇笔记**: [Four、eBPF 程序的解剖与工程化](../../docs/One-实践/四、eBPF%20程序的解剖与工程化.md) (手动编译基础)
-- **常见问题**: [FAQ](../FAQ.md)
+- **常见问题**: [FAQ](../../FAQ.md)
 - **环境配置**: [项目环境](../../docs/项目环境.md)
 - **基础示例**: [code/03-hello-world](../code/03-hello-world/)
 

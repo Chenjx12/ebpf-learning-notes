@@ -196,7 +196,7 @@ kprobe 挂钩在 execve 入口时,子进程的 comm 还未被替换,仍显示为
 ## 📖 相关文档
 
 - **学习笔记**: [Three、eBPF 的 Hello World](../../docs/One-实践/三、eBPF%20的%20Hello%20%20World.md)
-- **常见问题**: [FAQ](../FAQ.md)
+- **常见问题**: [FAQ](../../FAQ.md)
 - **环境配置**: [项目环境](../../docs/项目环境.md)
 - **第四篇笔记**: [Four、eBPF 程序的解剖与工程化](../../docs/One-实践/四、eBPF%20程序的解剖与工程化.md) (C/Python分离)
 
