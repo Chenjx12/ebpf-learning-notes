@@ -1,0 +1,32 @@
+[Unit]
+Description=Container Escape Detection & Defense System (eBPF)
+Documentation=https://github.com/Chenjx12/ebpf-learning-notes
+After=docker.service network.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/escape-defender
+ExecStart=/usr/bin/python3 -u escape-respond.py -r rules.yaml -s responses.yaml
+ExecStop=/bin/kill -SIGINT $MAINPID
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=escape-defender
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/escape-defender
+ReadOnlyPaths=/sys/fs/cgroup
+PrivateTmp=yes
+
+# 资源限制
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

@@ -33,6 +33,7 @@
 | [Seven](./docs/Seven、终极合体：打造容器运行时安全监控面板.md) | **监控面板**    | **多探针整合、动态映射、完整监控系统**                         |
 | [Eight](./docs/Eight、从监控到检测——构建容器逃逸规则引擎.md)   | **规则引擎**    | **YAML配置、三维检测模型(procfs挂载/ptrace注入/敏感文件访问)** |
 | [Nine](./docs/Nine、主动防御：从检测到自动响应.md)             | **主动防御**    | **Docker响应引擎、pause/disconnect、bpf_send_signal**          |
+| [Ten](./docs/Ten、性能优化与生产级部署.md)                     | **性能与部署**  | **Ring Buffer压测、内核态过滤、CPU开销、systemd部署**          |
 
 ### 辅助文档
 
@@ -186,10 +187,17 @@ ebpf-learning-notes/
     └── 09-response/       # 第九篇:主动防御
         ├── escape-respond.py      # ⭐⭐⭐⭐⭐ [检测+响应主程序](./code/09-response/escape-respond.py)
         ├── responder.py           # ⭐⭐⭐⭐ [响应引擎实现](./code/09-response/responder.py)
-        ├── responses.yaml         # ⭐⭐⭐ [响应策略配置](./code/09-response/responses.yaml)
-        ├── docker-compose.yml     # ⭐⭐⭐⭐ [攻防靶场编排](./code/09-response/docker-compose.yml)
+        ├── detector.py            # ⭐⭐⭐ [规则引擎](./code/09-response/detector.py)
+        ├── escape-detect.c        # ⭐⭐⭐⭐ [eBPF探针(含cgroup_id)](./code/09-response/escape-detect.c)
+        ├── rules.yaml / responses.yaml  # 规则与响应策略
+        ├── test-ptrace-simple.sh  # ⭐⭐⭐ [ptrace注入测试](./code/09-response/test-ptrace-simple.sh)
         ├── test-escape.sh         # ⭐⭐⭐ [procfs挂载测试](./code/09-response/test-escape.sh)
-        └── test-ptrace.sh         # ⭐⭐⭐⭐ [ptrace注入测试](./code/09-response/test-ptrace.sh)
+        └── test-openat.sh         # ⭐⭐ [敏感文件访问测试](./code/09-response/test-openat.sh)
+    └── 10-perf/           # 第十篇:性能优化与生产级部署
+        ├── perf-ringbuf-bench.py  # ⭐⭐⭐ [Ring Buffer容量压测](./code/10-perf/perf-ringbuf-bench.py)
+        ├── perf-filter-bench.py   # ⭐⭐⭐ [内核态过滤+CPU基准](./code/10-perf/perf-filter-bench.py)
+        ├── escape-defender.service # ⭐⭐ [systemd unit文件](./code/10-perf/escape-defender.service)
+        └── deploy.sh              # ⭐⭐ [一键部署脚本](./code/10-perf/deploy.sh)
 ```
 
 ## Star History

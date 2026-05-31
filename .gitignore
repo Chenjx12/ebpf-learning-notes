@@ -1,9 +1,10 @@
 # 个人方案与计划（不公开）
 毕业设计方案-eBPF容器安全.md
 第一个月计划.md
+# Claude Code 配置
+.claude/
+Claude.md
 docs/.claude/
-.claude/settings.local.json
-code/09-response/QUICKSTART.md
 
 # Python
 __pycache__/
@@ -40,4 +41,4 @@ Thumbs.db
 # 临时文件
 *.log
 tmp/
-docs/.claude/settings.local.json
+
