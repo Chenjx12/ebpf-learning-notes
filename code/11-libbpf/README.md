@@ -8,10 +8,12 @@
 
 | 文件名 | 说明 | 难度 | 推荐顺序 |
 |--------|------|------|---------|
-| [hello-buffer-config.bpf.c](./hello-buffer-config.bpf.c) | CO-RE 版 eBPF 内核程序 (Libbpf 风格) | ⭐⭐⭐⭐ | 1️⃣ |
-| [hello-buffer-config.c](./hello-buffer-config.c) | 用户态 C 加载器 (Skeleton 模式) | ⭐⭐⭐⭐ | 2️⃣ |
-| [hello-buffer-config.h](./hello-buffer-config.h) | 内核/用户态共享数据结构 | ⭐⭐⭐ | 3️⃣ |
-| [Makefile](./Makefile) | CO-RE 编译脚本 | ⭐⭐ | 4️⃣ |
+| [hello-buffer-config.h](./hello-buffer-config.h) | 内核/用户态共享数据结构 | ⭐⭐⭐ | 1️⃣ |
+| [hello-buffer-config.bpf.c](./hello-buffer-config.bpf.c) | CO-RE 版 eBPF 内核程序 (Libbpf 风格) | ⭐⭐⭐⭐ | 2️⃣ |
+| [hello-buffer-config.c](./hello-buffer-config.c) | 用户态 C 加载器 (Skeleton 模式, 含练习5) | ⭐⭐⭐⭐ | 3️⃣ |
+| [manual-attach.bpf.c](./manual-attach.bpf.c) | 练习6: 自定义 SEC() 变体 | ⭐⭐⭐⭐ | 4️⃣ |
+| [manual-attach.c](./manual-attach.c) | 练习6: 手动 kprobe 附加 | ⭐⭐⭐⭐⭐ | 5️⃣ |
+| [Makefile](./Makefile) | CO-RE 编译脚本 | ⭐⭐ | — |
 
 ## 🚀 快速开始
 
