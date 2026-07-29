@@ -22,32 +22,35 @@
 
 ### 第一小节：实践 — 容器逃逸检测系统从零到一
 
-| 章节                                                                                   | 标题            | 核心内容                                                       |
-| -------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
-| [一](./docs/One-实践/一、什么是%20eBPF.md)                                             | 什么是 eBPF     | 核心概念、Verifier、JIT、Maps                                  |
-| [二](./docs/One-实践/二、云原生下的%20eBPF.md)                                         | 云原生下的 eBPF | 网络管理、可观测性、安全防护                                   |
-| [三](./docs/One-实践/三、eBPF%20的%20Hello%20World.md)                                 | Hello World     | BCC框架、kprobe、Perf/Ring Buffer                              |
-| [四](./docs/One-实践/四、eBPF%20程序的解剖与工程化.md)                                 | **程序解剖**    | **手动编译、ELF段结构、C/Python分离**                          |
-| [五](./docs/One-实践/五、eBPF%20程序的拆分与组合.md)                                   | **函数调用**    | **BPF-to-BPF、Tail Call、模块化设计**                          |
-| [六](./docs/One-实践/六、容器感知与身份识别：从内核到云原生.md)                        | **容器感知**    | **Namespace、Cgroup、容器身份识别**                            |
-| [七](./docs/One-实践/七、终极合体：打造容器运行时安全监控面板.md)                      | **监控面板**    | **多探针整合、动态映射、完整监控系统**                         |
-| [八](./docs/One-实践/八、从监控到检测——构建容器逃逸规则引擎.md)                        | **规则引擎**    | **YAML配置、三维检测模型(procfs挂载/ptrace注入/敏感文件访问)** |
-| [九](./docs/One-实践/九、主动防御：从检测到自动响应.md)                                | **主动防御**    | **Docker响应引擎、pause/disconnect、bpf_send_signal**          |
-| [十](./docs/One-实践/十、性能优化与生产级部署.md)                                      | **性能与部署**  | **Ring Buffer压测、内核态过滤、CPU开销、systemd部署**          |
+| 章节                                                              | 标题            | 核心内容                                                       |
+| ----------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
+| [一](./docs/One-实践/一、什么是%20eBPF.md)                        | 什么是 eBPF     | 核心概念、Verifier、JIT、Maps                                  |
+| [二](./docs/One-实践/二、云原生下的%20eBPF.md)                    | 云原生下的 eBPF | 网络管理、可观测性、安全防护                                   |
+| [三](./docs/One-实践/三、eBPF%20的%20Hello%20World.md)            | Hello World     | BCC框架、kprobe、Perf/Ring Buffer                              |
+| [四](./docs/One-实践/四、eBPF%20程序的解剖与工程化.md)            | **程序解剖**    | **手动编译、ELF段结构、C/Python分离**                          |
+| [五](./docs/One-实践/五、eBPF%20程序的拆分与组合.md)              | **函数调用**    | **BPF-to-BPF、Tail Call、模块化设计**                          |
+| [六](./docs/One-实践/六、容器感知与身份识别：从内核到云原生.md)   | **容器感知**    | **Namespace、Cgroup、容器身份识别**                            |
+| [七](./docs/One-实践/七、终极合体：打造容器运行时安全监控面板.md) | **监控面板**    | **多探针整合、动态映射、完整监控系统**                         |
+| [八](./docs/One-实践/八、从监控到检测——构建容器逃逸规则引擎.md)   | **规则引擎**    | **YAML配置、三维检测模型(procfs挂载/ptrace注入/敏感文件访问)** |
+| [九](./docs/One-实践/九、主动防御：从检测到自动响应.md)           | **主动防御**    | **Docker响应引擎、pause/disconnect、bpf_send_signal**          |
+| [十](./docs/One-实践/十、性能优化与生产级部署.md)                 | **性能与部署**  | **Ring Buffer压测、内核态过滤、CPU开销、systemd部署**          |
 
 ### 第二小节：回顾 — 《Learning eBPF》精读笔记
 
-| 章节 | 标题 | 核心内容 | 代码 |
-|------|------|------|:--:|
-| [一](./docs/Two-回顾/一、CO-RE、BTF%20与%20Libbpf.md) | CO-RE、BTF 与 Libbpf | BTF 类型系统、CO-RE 重定位、BPF Skeleton、从 BCC 迁移 | [📂](./code/11-libbpf/) |
-| [二](./docs/Two-回顾/二、eBPF%20验证器.md) | eBPF 验证器 | 寄存器状态追踪、1M 指令限制、NULL 检查、循环验证 | [📂](./code/12-verifier/) |
-| [三](./docs/Two-回顾/三、eBPF%20程序类型与附加点.md) | eBPF 程序类型与附加点 | Kprobe/Tracepoint/XDP/LSM、autoload、手动附加 | [📂](./code/13-prog-types/) |
-| [四](./docs/Two-回顾/四、用于安全的%20eBPF.md) | 用于安全的 eBPF | Seccomp→Falco→LSM→Tetragon、TOCTOU、BPF LSM 阻断 | [📂](./code/14-security/) |
-| [五](./docs/Two-回顾/五、补充练习索引.md) | 补充练习索引 | Ch2~Ch4 + Ch8 XDP + Ch10 Go eBPF | [📂](./code/15-extra/) |
+| 章节                                                  | 标题                  | 核心内容                                              |            代码             |
+| ----------------------------------------------------- | --------------------- | ----------------------------------------------------- | :-------------------------: |
+| [一](./docs/Two-回顾/一、CO-RE、BTF%20与%20Libbpf.md) | CO-RE、BTF 与 Libbpf  | BTF 类型系统、CO-RE 重定位、BPF Skeleton、从 BCC 迁移 |   [📂](./code/11-libbpf/)   |
+| [二](./docs/Two-回顾/二、eBPF%20验证器.md)            | eBPF 验证器           | 寄存器状态追踪、1M 指令限制、NULL 检查、循环验证      |  [📂](./code/12-verifier/)  |
+| [三](./docs/Two-回顾/三、eBPF%20程序类型与附加点.md)  | eBPF 程序类型与附加点 | Kprobe/Tracepoint/XDP/LSM、autoload、手动附加         | [📂](./code/13-prog-types/) |
+| [四](./docs/Two-回顾/四、用于安全的%20eBPF.md)        | 用于安全的 eBPF       | Seccomp→Falco→LSM→Tetragon、TOCTOU、BPF LSM 阻断      |  [📂](./code/14-security/)  |
+| [五](./docs/Two-回顾/五、补充练习索引.md)             | 补充练习索引          | Ch2~Ch4 + Ch8 XDP + Ch10 Go eBPF                      |   [📂](./code/15-extra/)    |
 
 ### 第三小节：扩展 — Kubernetes 学习记录
 
-> 📝 待补充
+| 章节 | 标题 | 内容 |
+|------|------|------|
+| [零](./docs/Three-扩展/零、Kubernetes%20学习路线.md) | K8s 学习路线 | 针对性学习计划 + 跳过清单 |
+| 一~四 | 待补充 | — |
 
 ### 第四小节：融合 — K8s 下的 eBPF 安全实践
 
@@ -257,11 +260,8 @@ ebpf-learning-notes/
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=Chenjx12%2Febpf-learning-notes&type=date&legend=bottom-right">
-
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&theme=dark&legend=bottom-right&sealed_token=joYdtfP_NaqxXAJB3lvL-sF6rnUcBsxxA0pt-Fys2W5VGSi0ne1toWS8lVMAdzCD5aZoHuOWwpqbyyX_rFwpq8i8RByXIBXHTb0-4Uu79PMehjFhbjFlCmA7iWpf_VkQzcU1XOE2tBvnYVuFLo7X7_KOe22lbEfYoHB3C1mto_R5lDbpoP_VVF_KMUOI" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&legend=bottom-right&sealed_token=joYdtfP_NaqxXAJB3lvL-sF6rnUcBsxxA0pt-Fys2W5VGSi0ne1toWS8lVMAdzCD5aZoHuOWwpqbyyX_rFwpq8i8RByXIBXHTb0-4Uu79PMehjFhbjFlCmA7iWpf_VkQzcU1XOE2tBvnYVuFLo7X7_KOe22lbEfYoHB3C1mto_R5lDbpoP_VVF_KMUOI" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&legend=bottom-right&sealed_token=joYdtfP_NaqxXAJB3lvL-sF6rnUcBsxxA0pt-Fys2W5VGSi0ne1toWS8lVMAdzCD5aZoHuOWwpqbyyX_rFwpq8i8RByXIBXHTb0-4Uu79PMehjFhbjFlCmA7iWpf_VkQzcU1XOE2tBvnYVuFLo7X7_KOe22lbEfYoHB3C1mto_R5lDbpoP_VVF_KMUOI" />
  </picture>
-</a>
