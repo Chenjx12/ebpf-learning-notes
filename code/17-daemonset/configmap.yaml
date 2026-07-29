@@ -1,0 +1,74 @@
+# ConfigMap — 检测规则和响应策略 (独立于镜像, 可热更新)
+# 对应笔记: docs/Three-扩展/WEEK 2.md
+#
+# 用法: kubectl apply -f configmap.yaml
+# 修改规则后重新 apply 即可, 无需重建镜像
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ebpf-detector-config
+  namespace: default
+data:
+  rules.yaml: |
+    # 容器逃逸检测规则
+    rules:
+      - id: ESCAPE-001
+        name: "procfs mount escape"
+        description: "容器内挂载宿主机 /proc 文件系统"
+        type: mount
+        severity: critical
+        conditions:
+          - field: source
+            pattern: "proc"
+          - field: target
+            not_containername: true
+        message: "检测到 procfs 挂载逃逸行为"
+
+      - id: ESCAPE-002
+        name: "ptrace injection"
+        description: "容器内 ptrace 附加到宿主机进程"
+        type: ptrace
+        severity: critical
+        conditions:
+          - field: target_namespace
+            value: "host"
+        message: "检测到 ptrace 注入攻击"
+
+      - id: ESCAPE-003
+        name: "sensitive file access"
+        description: "访问宿主机敏感文件"
+        type: openat
+        severity: high
+        conditions:
+          - field: filename
+            patterns:
+              - "/etc/shadow"
+              - "/etc/passwd"
+              - "/proc/kcore"
+        message: "检测到敏感宿主机文件访问"
+
+  responses.yaml: |
+    # 主动响应策略
+    responses:
+      - alert_id: ESCAPE-001
+        actions:
+          - type: isolate_network
+            reason: "阻断 procfs 挂载逃逸 — 隔离容器网络"
+          - type: log
+            reason: "记录告警详情"
+        auto_respond: true
+
+      - alert_id: ESCAPE-002
+        actions:
+          - type: kill_process
+            reason: "阻止 ptrace 注入 — 杀死攻击进程"
+          - type: log
+            reason: "记录告警详情"
+        auto_respond: true
+
+      - alert_id: ESCAPE-003
+        actions:
+          - type: log
+            reason: "敏感文件访问 — 仅告警观察"
+        auto_respond: false

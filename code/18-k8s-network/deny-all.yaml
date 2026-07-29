@@ -1,0 +1,18 @@
+# default-deny NetworkPolicy — 默认拒绝所有入站流量
+# 对应笔记: docs/Three-扩展/WEEK 3.md
+#
+# 效果: 应用后, 所有 Pod 默认无法被其他 Pod 访问
+#       只有显式白名单的 ingress 规则才允许
+#
+# 用于: 逃逸检测响应 — 发现可疑容器后立即隔离
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: default
+spec:
+  podSelector: {}  # 空选择器 = 匹配所有 Pod
+  policyTypes:
+    - Ingress       # 拒绝所有入站
+    - Egress        # 拒绝所有出站

@@ -1,0 +1,27 @@
+# 允许 DNS 出站 — 配合 default-deny 使用
+# 对应笔记: docs/Three-扩展/WEEK 3.md
+#
+# 用途: 即使应用了 deny-all, 仍需允许 DNS 查询 (UDP 53)
+#       否则容器内所有域名解析都会失败
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # 允许 UDP 53 (DNS) 到 kube-dns Service
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53

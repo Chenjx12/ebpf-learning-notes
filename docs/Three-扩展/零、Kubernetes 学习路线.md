@@ -45,13 +45,13 @@ kubectl get nodes
 - [minikube 官方文档](https://minikube.sigs.k8s.io/docs/start/)
 - [k3s 快速开始](https://docs.k3s.io/quick-start)
 
-**关联项目**：你的 eBPF detector 最终要作为一个 K8s 工作负载跑在这个集群上。
+**关联项目**：我们的 eBPF detector 最终要作为一个 K8s 工作负载跑在这个集群上。
 
 ---
 
 ### 2. Pod + DaemonSet（1 周）
 
-**目标**：把你的 eBPF 程序以 DaemonSet 方式跑在每个节点上。
+**目标**：让eBPF 程序以 DaemonSet 方式跑在每个节点上。
 
 **必须理解的概念**：
 
@@ -59,13 +59,13 @@ kubectl get nodes
 |------|--------|----------------|
 | Pod | 最小调度单位，含 1+ 个容器共享 namespace | 相当于 `docker run` 的一个容器（或几个紧密耦合的容器） |
 | DaemonSet | 保证每个节点运行一个 Pod 副本 | 相当于在每个节点上执行 `sudo python3 detector.py` |
-| privileged container | 允许容器访问宿主机内核 | 你的 eBPF 程序需要 `sudo` 权限 |
-| hostPID / hostNetwork | Pod 共享宿主机 PID/网络 namespace | 替代你现在的 `--pid=host --net=host` |
+| privileged container | 允许容器访问宿主机内核 | eBPF 程序需要 `sudo` 权限 |
+| hostPID / hostNetwork | Pod 共享宿主机 PID/网络 namespace | 替代现在的 `--pid=host --net=host` |
 
 **动手验证**：
 
 ```yaml
-# daemonset-ebpf.yaml — 把你的 eBPF 程序跑成 DaemonSet 的骨架
+# daemonset-ebpf.yaml — 让 eBPF 程序跑成 DaemonSet 的骨架
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -90,7 +90,7 @@ spec:
 - [Kubernetes: DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/)
 - [Kubernetes: Pod Security](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
 
-**关联项目**：这是第三小节的核心代码——把你现有的 `escape-respond.py` 容器化并部署为 DaemonSet。
+**关联项目**：这是第三小节的核心代码——把现有的 `escape-respond.py` 容器化并部署为 DaemonSet。
 
 ---
 
@@ -123,7 +123,7 @@ kubectl get networkpolicy -A
 - [Kubernetes: Cluster Networking](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
 - [Cilium eBPF-based Networking](https://docs.cilium.io/en/stable/network/) — 了解 eBPF 在 K8s 网络中的实际应用
 
-**关联项目**：你的容器逃逸检测需要识别"异常的网络连接"（如容器 A 访问容器 B 的 private port），理解 Pod 网络模型是基础。
+**关联项目**：容器逃逸检测需要识别"异常的网络连接"（如容器 A 访问容器 B 的 private port），理解 Pod 网络模型是基础。
 
 ---
 
@@ -140,7 +140,7 @@ kubectl get networkpolicy -A
 | 隔离网络 | `container.disconnect()` | 应用 NetworkPolicy deny-all |
 | 获取容器信息 | `container.attrs` | `k8s.read_namespaced_pod()` |
 
-**推荐使用 Python client**（你现在用 Python + Docker SDK）：
+**推荐使用 Python client**（现在用 Python + Docker SDK）：
 
 ```bash
 pip install kubernetes
@@ -173,7 +173,7 @@ for pod in pods.items:
 | Helm Chart / Kustomize | DaemonSet 一个 YAML 就够，不需要模板引擎 |
 | Service Mesh (Istio/Linkerd) | 跟你项目无关 |
 | Operator 开发 | 太重，毕设不需要自定义 Controller |
-| StatefulSet / PV/PVC | 你不需要持久存储 |
+| StatefulSet / PV/PVC | 不需要持久存储 |
 | Ingress / Gateway API | 不需要对外暴露 HTTP 服务 |
 | HPA / VPA 自动扩缩容 | DaemonSet 固定每节点一个 |
 | 多集群 / Federation | 远超范围 |
@@ -188,10 +188,10 @@ for pod in pods.items:
 | 序号 | 笔记 | 代码 | 核心内容 |
 |:--:|------|------|------|
 | 零 | 本文档 | — | 学习路线规划 |
-| 一 | K8s 环境搭建 | `code/16-k8s-setup/` | minikube/k3s 安装 + kubectl 基础命令 |
-| 二 | Pod 与 DaemonSet | `code/17-daemonset/` | 把你的 eBPF 程序跑成 DaemonSet |
-| 三 | K8s 网络与逃逸面 | `code/18-k8s-network/` | Pod 网络模型 + NetworkPolicy + 逃逸路径分析 |
-| 四 | K8s API 编程 | `code/19-k8s-api/` | Python client 替代 Docker SDK 做响应 |
+| 一 | [WEEK 1](./WEEK%201.md) | [📂](../../code/16-k8s-setup/) | minikube/k3s 安装 + kubectl 基础命令 |
+| 二 | [WEEK 2](./WEEK%202.md) | [📂](../../code/17-daemonset/) | 让 eBPF 程序跑成 DaemonSet |
+| 三 | [WEEK 3](./WEEK%203.md) | [📂](../../code/18-k8s-network/) | Pod 网络模型 + NetworkPolicy + 逃逸路径分析 |
+| 四 | [WEEK 4](./WEEK%204.md) | [📂](../../code/19-k8s-api/) | Python client 替代 Docker SDK 做响应 |
 
 ---
 

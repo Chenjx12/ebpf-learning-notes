@@ -1,0 +1,19 @@
+# 单 Pod 网络隔离 — 对指定 Pod 应用 deny-all
+# 对应笔记: docs/Three-扩展/WEEK 3.md
+#
+# 用法 (替换 <pod-name> 为目标 Pod 名称):
+#   sed 's/<pod-name>/malicious-pod/g' isolate-pod.yaml | kubectl apply -f -
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: isolate-<pod-name>
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: <pod-name>
+  policyTypes:
+    - Ingress
+    - Egress
+  # 空的 ingress/egress = 拒绝全部进出流量

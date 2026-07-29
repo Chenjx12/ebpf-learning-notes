@@ -1,0 +1,75 @@
+# DaemonSet — 在每个节点运行 eBPF 逃逸检测器
+# 对应笔记: docs/Three-扩展/WEEK 2.md
+#
+# 部署: kubectl apply -f configmap.yaml -f rbac.yaml -f daemonset.yaml
+# 查看: kubectl get pods -l app=ebpf-detector
+# 日志: kubectl logs -l app=ebpf-detector
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ebpf-detector
+  namespace: default
+  labels:
+    app: ebpf-detector
+spec:
+  selector:
+    matchLabels:
+      app: ebpf-detector
+  template:
+    metadata:
+      labels:
+        app: ebpf-detector
+    spec:
+      # eBPF 特权要求
+      hostPID: true         # 共享宿主机 PID namespace (监控所有进程)
+      hostNetwork: true     # 共享宿主机网络 (监控所有网络流量)
+
+      serviceAccountName: ebpf-detector
+
+      containers:
+      - name: detector
+        image: ebpf-detector:latest
+        imagePullPolicy: IfNotPresent  # 本地构建, 不从 registry 拉
+
+        securityContext:
+          privileged: true   # eBPF 程序加载需要特权模式
+          capabilities:
+            add:
+              - CAP_BPF
+              - CAP_SYS_ADMIN
+              - CAP_NET_ADMIN
+              - CAP_SYS_PTRACE
+
+        # 挂载宿主机文件系统 (只读)
+        volumeMounts:
+          - name: proc
+            mountPath: /host/proc
+            readOnly: true
+          - name: sys
+            mountPath: /host/sys
+            readOnly: true
+          - name: cgroup
+            mountPath: /host/cgroup
+            readOnly: true
+          - name: docker-sock
+            mountPath: /var/run/docker.sock  # Docker SDK 通信 (Week 2~3)
+          - name: config
+            mountPath: /app/config           # 规则文件挂载点
+
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+        - name: config
+          configMap:
+            name: ebpf-detector-config

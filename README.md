@@ -47,10 +47,13 @@
 
 ### 第三小节：扩展 — Kubernetes 学习记录
 
-| 章节 | 标题 | 内容 |
-|------|------|------|
-| [零](./docs/Three-扩展/零、Kubernetes%20学习路线.md) | K8s 学习路线 | 针对性学习计划 + 跳过清单 |
-| 一~四 | 待补充 | — |
+| 章节 | 标题 | 核心内容 | 代码 |
+|------|------|------|:--:|
+| [零](./docs/Three-扩展/零、Kubernetes%20学习路线.md) | K8s 学习路线 | 针对性学习计划 + 跳过清单 | — |
+| [WEEK 1](./docs/Three-扩展/WEEK%201.md) | K8s 环境搭建 | k3s 安装 + kubectl 基础 | [📂](./code/16-k8s-setup/) |
+| [WEEK 2](./docs/Three-扩展/WEEK%202.md) | Pod 与 DaemonSet | 容器化 eBPF + DaemonSet 部署 | [📂](./code/17-daemonset/) |
+| [WEEK 3](./docs/Three-扩展/WEEK%203.md) | K8s 网络与逃逸面 | Pod 网络模型 + NetworkPolicy | [📂](./code/18-k8s-network/) |
+| [WEEK 4](./docs/Three-扩展/WEEK%204.md) | K8s API 编程 | Python Client 替代 Docker SDK | [📂](./code/19-k8s-api/) |
 
 ### 第四小节：融合 — K8s 下的 eBPF 安全实践
 
@@ -184,6 +187,11 @@ ebpf-learning-notes/
 │   │   ├── 四、用于安全的 eBPF.md                     ✅
 │   │   └── 五、补充练习索引.md                        ✅
 │   ├── Three-扩展/        # 第三小节: Kubernetes 学习记录
+│   │   ├── 零、Kubernetes 学习路线.md                  ✅
+│   │   ├── WEEK 1.md  (K8s 环境搭建)                   ✅
+│   │   ├── WEEK 2.md  (Pod 与 DaemonSet)               ✅
+│   │   ├── WEEK 3.md  (K8s 网络与逃逸面)               ✅
+│   │   └── WEEK 4.md  (K8s API 编程)                   ✅
 │   └── Four-融合/         # 第四小节: K8s 下的 eBPF 安全实践
 └── code/                  # 💻 实验代码
     ├── 03-hello-world/    # 第三篇:基础示例
@@ -256,6 +264,18 @@ ebpf-learning-notes/
         ├── ch4/                       # ⭐⭐ Ch4 bpf() syscall 命令集
         ├── ch8-xdp/                   # ⭐⭐⭐ Ch8 XDP ICMP 区分
         └── ch10-hello-go/             # ⭐⭐⭐ Ch10 Go + cilium/ebpf
+    ├── 16-k8s-setup/      # 第三小节 Week 1: K8s 环境搭建
+    │   └── setup-k3s.sh               # ⭐ [一键安装 k3s](./code/16-k8s-setup/setup-k3s.sh)
+    ├── 17-daemonset/      # 第三小节 Week 2: DaemonSet 部署
+    │   ├── Dockerfile                  # 🐳 [容器镜像构建](./code/17-daemonset/Dockerfile)
+    │   ├── daemonset.yaml             # ☸️  [DaemonSet 部署清单](./code/17-daemonset/daemonset.yaml)
+    │   ├── configmap.yaml             # ⚙️  [规则 ConfigMap](./code/17-daemonset/configmap.yaml)
+    │   └── rbac.yaml                  # 🔐 [ServiceAccount + RBAC](./code/17-daemonset/rbac.yaml)
+    ├── 18-k8s-network/    # 第三小节 Week 3: K8s 网络
+    │   ├── deny-all.yaml              # 🚫 [默认拒绝 NetworkPolicy](./code/18-k8s-network/deny-all.yaml)
+    │   └── isolate-pod.yaml           # 🔒 [单 Pod 隔离模板](./code/18-k8s-network/isolate-pod.yaml)
+    └── 19-k8s-api/        # 第三小节 Week 4: K8s API 编程
+        └── k8s_responder.py           # 🔄 [K8s API 响应引擎](./code/19-k8s-api/k8s_responder.py)
 ```
 
 ## Star History
