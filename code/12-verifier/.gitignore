@@ -1,0 +1,4 @@
+# eBPF 验证器练习 — 编译产物
+vmlinux.h
+*.bpf.o
+loader

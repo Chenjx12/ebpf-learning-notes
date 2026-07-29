@@ -37,7 +37,13 @@
 
 ### 第二小节：回顾 — 《Learning eBPF》精读笔记
 
-> 📝 待补充
+| 章节 | 标题 | 核心内容 | 代码 |
+|------|------|------|:--:|
+| [一](./docs/Two-回顾/一、CO-RE、BTF%20与%20Libbpf.md) | CO-RE、BTF 与 Libbpf | BTF 类型系统、CO-RE 重定位、BPF Skeleton、从 BCC 迁移 | [📂](./code/11-libbpf/) |
+| [二](./docs/Two-回顾/二、eBPF%20验证器.md) | eBPF 验证器 | 寄存器状态追踪、1M 指令限制、NULL 检查、循环验证 | [📂](./code/12-verifier/) |
+| [三](./docs/Two-回顾/三、eBPF%20程序类型与附加点.md) | eBPF 程序类型与附加点 | Kprobe/Tracepoint/XDP/LSM、autoload、手动附加 | [📂](./code/13-prog-types/) |
+| [四](./docs/Two-回顾/四、用于安全的%20eBPF.md) | 用于安全的 eBPF | Seccomp→Falco→LSM→Tetragon、TOCTOU、BPF LSM 阻断 | [📂](./code/14-security/) |
+| [五](./docs/Two-回顾/五、补充练习索引.md) | 补充练习索引 | Ch2~Ch4 + Ch8 XDP + Ch10 Go eBPF | [📂](./code/15-extra/) |
 
 ### 第三小节：扩展 — Kubernetes 学习记录
 
@@ -169,6 +175,11 @@ ebpf-learning-notes/
 │   │   ├── 九、主动防御：从检测到自动响应.md             ✅
 │   │   └── 十、性能优化与生产级部署.md                   ✅
 │   ├── Two-回顾/          # 第二小节: 《Learning eBPF》精读笔记
+│   │   ├── 一、CO-RE、BTF 与 Libbpf.md               ✅
+│   │   ├── 二、eBPF 验证器.md                        ✅
+│   │   ├── 三、eBPF 程序类型与附加点.md               ✅
+│   │   ├── 四、用于安全的 eBPF.md                     ✅
+│   │   └── 五、补充练习索引.md                        ✅
 │   ├── Three-扩展/        # 第三小节: Kubernetes 学习记录
 │   └── Four-融合/         # 第四小节: K8s 下的 eBPF 安全实践
 └── code/                  # 💻 实验代码
@@ -216,11 +227,38 @@ ebpf-learning-notes/
         ├── perf-filter-bench.py   # ⭐⭐⭐ [内核态过滤+CPU基准](./code/10-perf/perf-filter-bench.py)
         ├── escape-defender.service # ⭐⭐ [systemd unit文件](./code/10-perf/escape-defender.service)
         └── deploy.sh              # ⭐⭐ [一键部署脚本](./code/10-perf/deploy.sh)
+    ├── 11-libbpf/         # 第二小节 Ch5: CO-RE/Libbpf
+    │   ├── hello-buffer-config.bpf.c  # ⭐⭐⭐⭐ [CO-RE eBPF 内核程序](./code/11-libbpf/hello-buffer-config.bpf.c)
+    │   ├── hello-buffer-config.c      # ⭐⭐⭐⭐ [Skeleton 用户态加载器](./code/11-libbpf/hello-buffer-config.c)
+    │   ├── manual-attach.bpf.c        # ⭐⭐⭐⭐⭐ [手动附加变体](./code/11-libbpf/manual-attach.bpf.c)
+    │   └── manual-attach.c            # ⭐⭐⭐⭐⭐ [手动附加加载器](./code/11-libbpf/manual-attach.c)
+    ├── 12-verifier/       # 第二小节 Ch6: eBPF 验证器
+    │   ├── ex1_boundary.bpf.c         # ⭐⭐⭐ [NULL 解引用 (验证器拒绝)](./code/12-verifier/ex1_boundary.bpf.c)
+    │   ├── ex2_bounded_loop.bpf.c     # ⭐⭐⭐ [有界循环 (验证器通过)](./code/12-verifier/ex2_bounded_loop.bpf.c)
+    │   ├── ex3_unbounded_loop.bpf.c   # ⭐⭐⭐ [无界循环 (验证器拒绝)](./code/12-verifier/ex3_unbounded_loop.bpf.c)
+    │   ├── ex4_wrong_helper.bpf.c     # ⭐⭐⭐ [Helper 白名单 (验证器拒绝)](./code/12-verifier/ex4_wrong_helper.bpf.c)
+    │   └── loader.c                   # ⭐⭐⭐ [通用加载器 (verbose log)](./code/12-verifier/loader.c)
+    ├── 13-prog-types/     # 第二小节 Ch7: 程序类型与附加点
+    │   ├── prog_types.bpf.c           # ⭐⭐⭐ [3 种程序类型演示](./code/13-prog-types/prog_types.bpf.c)
+    │   ├── ex1_list.c                 # ⭐⭐ [列出程序类型](./code/13-prog-types/ex1_list.c)
+    │   ├── ex2_selective.c            # ⭐⭐⭐ [选择性加载 (autoload)](./code/13-prog-types/ex2_selective.c)
+    │   ├── ex3_kprobe.c               # ⭐⭐⭐ [手动 kprobe 附加](./code/13-prog-types/ex3_kprobe.c)
+    │   └── ex4_tracepoint.c           # ⭐⭐⭐ [手动 tracepoint 附加](./code/13-prog-types/ex4_tracepoint.c)
+    ├── 14-security/       # 第二小节 Ch9: 用于安全的 eBPF
+    │   ├── lsm_block.bpf.c            # ⭐⭐⭐ [BPF LSM 阻断 chmod](./code/14-security/lsm_block.bpf.c)
+    │   └── ex1_lsm.c                  # ⭐⭐⭐ [LSM 加载器](./code/14-security/ex1_lsm.c)
+    └── 15-extra/          # 第二小节 补充练习
+        ├── ch2/                       # ⭐⭐ Ch2 BCC Python 练习 (5 个脚本)
+        ├── ch3/                       # ⭐⭐ Ch3 bpftool 命令集
+        ├── ch4/                       # ⭐⭐ Ch4 bpf() syscall 命令集
+        ├── ch8-xdp/                   # ⭐⭐⭐ Ch8 XDP ICMP 区分
+        └── ch10-hello-go/             # ⭐⭐⭐ Ch10 Go + cilium/ebpf
 ```
 
 ## Star History
 
 <a href="https://www.star-history.com/?repos=Chenjx12%2Febpf-learning-notes&type=date&legend=bottom-right">
+
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&theme=dark&legend=top-left" />
    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Chenjx12/ebpf-learning-notes&type=date&legend=top-left" />

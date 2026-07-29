@@ -116,12 +116,71 @@ bpf_send_signal(SIGKILL);  // 在内核态同步杀死进程
 
 ---
 
-## 📝 实践任务 (替代练习)
+## 七、实战: BPF LSM 阻断实验
 
-- [ ] **任务 1**: 用 BPF LSM 实现阻断
-- [ ] **任务 2**: 学习 Falco 规则引擎
-- [ ] **任务 3**: 研究 Tetragon TracingPolicy
-- [ ] **任务 4**: 理解 TOCTOU 与 LSM 的差异
+本章代码位于 `code/14-security/`，聚焦一个核心实验: 用 BPF LSM 在内核态阻断文件权限修改。
+
+### 7.1 代码
+
+**内核态** (`lsm_block.bpf.c`):
+
+```c
+SEC("lsm/path_chmod")
+int BPF_PROG(block_chmod, struct path *path, umode_t mode)
+{
+    return -1;  // -EPERM: 拒绝所有 chmod
+}
+```
+
+**用户态** (`ex1_lsm.c`): 标准 libbpf 加载 + 自动检测 LSM 是否激活。
+
+### 7.2 运行
+
+```bash
+cd code/14-security
+make
+sudo ./ex1_lsm lsm_block.bpf.o
+# 另一个终端: chmod 777 /tmp/test → Operation not permitted
+```
+
+### 7.3 前置条件: 激活 BPF LSM
+
+大多数发行版默认**不**激活 BPF LSM。加载器会自动检测并给出修复指引:
+
+```
+⚠️  BPF LSM 未激活! (活跃 LSM: lockdown,capability,landlock,yama,apparmor)
+   修复方法 (需重启):
+   1. sudo vi /etc/default/grub
+   2. 找到 GRUB_CMDLINE_LINUX, 在 lsm= 值末尾添加 ,bpf
+      例如: lsm=lockdown,capability,landlock,yama,apparmor,bpf
+   3. sudo update-grub && sudo reboot
+```
+
+### 7.4 TOCTOU: 为什么 LSM 比 Tracepoint 更安全
+
+```
+Tracepoint 路径:
+  用户态恶意程序 → 构造恶意参数 → syscall (参数还在用户态内存)
+  → tracepoint 触发 (eBPF 此时检查参数)
+  → [竞争窗口: 攻击者可修改参数]  ← TOCTOU!
+  → 内核复制参数 → 执行操作
+
+LSM 路径:
+  用户态恶意程序 → syscall → 内核复制参数到内核内存
+  → LSM hook 触发 (eBPF 此时检查参数)
+  → 参数已在内核内存, 不可被用户态修改  ← 安全!
+  → 返回非零 → 拒绝操作; 返回 0 → 允许
+```
+
+---
+
+## 📝 实践任务
+
+- [ ] **任务 1**: 启用 BPF LSM, 加载 `lsm_block.bpf.o`, 验证 `chmod` 被阻断
+- [ ] **任务 2**: 修改 `lsm_block.bpf.c` 实现条件阻断 (只拒绝 SUID/特定 UID)
+- [ ] **任务 3**: 学习 Falco 规则引擎 — ________________
+- [ ] **任务 4**: 研究 Tetragon TracingPolicy — ________________
+- [ ] **任务 5**: 理解 TOCTOU 与 LSM 的差异 (见 7.4 节图解) — ________________
 
 ---
 
@@ -133,4 +192,4 @@ bpf_send_signal(SIGKILL);  // 在内核态同步杀死进程
 
 ---
 
-*最后更新: 2026-06-02*
+*最后更新: 2026-07-29*

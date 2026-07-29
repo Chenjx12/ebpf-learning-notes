@@ -84,12 +84,84 @@ int BPF_PROG(path_chmod, const struct path *path, umode_t mode)
 
 ---
 
+## 四、实战: 程序类型与附加方式
+
+本章配套代码在 `code/13-prog-types/`，包含 4 个练习 + 1 个思考实验。
+
+### 4.1 练习1: 查看程序类型
+
+```bash
+sudo ./ex1_list prog_types.bpf.o
+```
+
+输出示例:
+```
+║ kprobe_openat        │ KPROBE             │ (none / auto)
+║ tracepoint_exec      │ TRACEPOINT         │ (none / auto)
+║ raw_tp_openat        │ TRACEPOINT         │ (none / auto)
+```
+
+**关键 API**: `bpf_object__for_each_program()`, `bpf_program__name()`, `bpf_program__type()`
+
+### 4.2 练习2: 选择性加载
+
+从多程序 `.bpf.o` 中只加载一个程序, 其余用 `bpf_program__set_autoload(false)` 禁用:
+
+```bash
+sudo ./ex2_selective prog_types.bpf.o kprobe_openat
+# 输出: ⏭️ 跳过 tracepoint_exec / 跳过 raw_tp_openat / ✅ 加载 kprobe_openat
+```
+
+**关键 API**: `bpf_program__set_autoload(prog, false)`
+
+### 4.3 练习3: 手动 Kprobe 附加
+
+程序使用通用 `SEC("kprobe")` (不指定函数), 从用户态动态选择目标:
+
+```bash
+# 不指定函数名 → 列出 /proc/kallsyms 供参考
+sudo ./ex3_kprobe kprobe_custom.bpf.o
+
+# 手动指定目标函数
+sudo ./ex3_kprobe kprobe_custom.bpf.o do_sys_openat2
+sudo ./ex3_kprobe kprobe_custom.bpf.o __x64_sys_execve
+```
+
+**关键 API**: `bpf_program__attach_kprobe(prog, false, func_name)`
+
+### 4.4 练习4: 手动 Tracepoint 附加
+
+从 `/sys/kernel/debug/tracing/available_events` 选任意 tracepoint:
+
+```bash
+sudo ./ex4_tracepoint tp_custom.bpf.o sched sched_process_exec
+sudo ./ex4_tracepoint tp_custom.bpf.o syscalls sys_enter_openat
+sudo ./ex4_tracepoint tp_custom.bpf.o syscalls sys_enter_execve
+```
+
+**关键 API**: `bpf_program__attach_tracepoint(prog, category, name)`
+
+### 4.5 练习5: XDP 独占性 (思考实验)
+
+XDP 同一网口只能附加一个程序。可验证:
+
+```bash
+# 使用 bpftool 加载第一个 XDP 程序
+sudo bpftool prog load xdp_pass.bpf.o /sys/fs/bpf/xdp1
+sudo bpftool net attach xdp pinned /sys/fs/bpf/xdp1 dev lo
+
+# 尝试加载第二个 → Device or resource busy
+sudo bpftool net attach xdp pinned /sys/fs/bpf/xdp2 dev lo
+```
+
+---
+
 ## 📝 练习
 
-- [ ] **练习 1**: strace 观察不同程序的 prog_type
-- [ ] **练习 2**: 只加载单个程序 (libbpf 用户态编程)
-- [ ] **练习 3**: 自定义 kprobe/fentry (从 /proc/kallsyms 选函数)
-- [ ] **练习 4**: 自定义 tracepoint (从 available_events 选)
+- [ ] **练习 1**: 用 `ex1_list` 查看 prog_types.bpf.o 中每个程序的类型
+- [ ] **练习 2**: 用 `ex2_selective` 选择性加载一个程序，观察 autoload 控制
+- [ ] **练习 3**: 用 `ex3_kprobe` 从 /proc/kallsyms 手动 kprobe 附加
+- [ ] **练习 4**: 用 `ex4_tracepoint` 从 available_events 自定义 tracepoint
 - [ ] **练习 5**: 验证 XDP 独占性 (同一网口只能一个 XDP)
 
 ---
@@ -103,4 +175,4 @@ int BPF_PROG(path_chmod, const struct path *path, umode_t mode)
 
 ---
 
-*最后更新: 2026-06-02*
+*最后更新: 2026-07-29*

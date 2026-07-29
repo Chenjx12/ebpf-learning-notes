@@ -9,6 +9,7 @@ INCLUDES := -I/usr/include/$(shell uname -m)-linux-gnu
 CLANG    ?= clang
 BPFTOOL  ?= bpftool
 CFLAGS   := -Wall -O2 -g
+LDFLAGS  := -L/usr/lib64 -lbpf -lelf -lz
 BPF_CFLAGS := -target bpf -D __TARGET_ARCH_$(ARCH) $(INCLUDES) -Wall -O2 -g
 
 # 主程序
@@ -40,7 +41,7 @@ $(SKEL_H): $(BPF_OBJ)
 
 # ===== 3. 编译用户态加载器 =====
 $(USER_BIN): hello-buffer-config.c $(SKEL_H) hello-buffer-config.h
-	$(CC) $(CFLAGS) -o $@ $< -lbpf -lelf -lz
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 	@echo "  ✅ Userspace loader compiled: $@"
 
 # ===== 练习6: 手动附加版本 =====
@@ -54,7 +55,7 @@ $(MANUAL_SKEL_H): $(MANUAL_BPF_OBJ)
 	@echo "  ✅ [Exercise 6] Skeleton header generated: $@"
 
 $(MANUAL_BIN): manual-attach.c $(MANUAL_SKEL_H) hello-buffer-config.h
-	$(CC) $(CFLAGS) -o $@ $< -lbpf -lelf -lz
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 	@echo "  ✅ [Exercise 6] Manual-attach loader compiled: $@"
 
 # ===== 生成 vmlinux.h (CO-RE 必需) =====

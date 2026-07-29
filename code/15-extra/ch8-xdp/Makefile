@@ -16,7 +16,7 @@ USER_BIN := ping-xdp
 
 all: $(USER_BIN)
 
-$(BPF_OBJ): ping-xdp.bpf.c vmlinux.h
+$(BPF_OBJ): ping-xdp.bpf.c
 	$(CLANG) $(BPF_CFLAGS) -c $< -o $@
 	llvm-strip -g $@
 	@echo "  ✅ XDP object compiled: $@"
@@ -26,7 +26,7 @@ $(SKEL_H): $(BPF_OBJ)
 	@echo "  ✅ Skeleton generated: $@"
 
 $(USER_BIN): ping-xdp.c $(SKEL_H)
-	$(CC) $(CFLAGS) -o $@ $< -lbpf -lelf -lz
+	$(CC) $(CFLAGS) -o $@ $< -L/usr/lib64 -lbpf -lelf -lz
 	@echo "  ✅ Loader compiled: $@"
 
 generate-vmlinux:

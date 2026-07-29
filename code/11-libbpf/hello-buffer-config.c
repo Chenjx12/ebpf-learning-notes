@@ -9,7 +9,9 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <linux/types.h>
 #include <bpf/libbpf.h>
+#include <bpf/bpf.h>
 #include "hello-buffer-config.h"
 #include "hello-buffer-config.skel.h"  // bpftool gen skeleton 生成
 
@@ -60,15 +62,14 @@ int main(int argc, char **argv)
 
     // ===== 4. 写入 map 配置 (练习5) =====
     // 为 UID 0 (root) 设置自定义消息
-    u32 uid0 = 0;
+    __u32 uid0 = 0;
     struct user_msg_t root_msg = { .message = "Hi root!" };
-    int map_fd = bpf_map__fd(skel->maps.my_config);
-    bpf_map_update_elem(map_fd, &uid0, &root_msg, BPF_ANY);
+    bpf_map__update_elem(skel->maps.my_config, &uid0, sizeof(uid0), &root_msg, sizeof(root_msg), BPF_ANY);
 
     // 为 UID 1000 (普通用户) 设置自定义消息
-    u32 uid1000 = 1000;
+    __u32 uid1000 = 1000;
     struct user_msg_t user_msg = { .message = "Hi user!" };
-    bpf_map_update_elem(map_fd, &uid1000, &user_msg, BPF_ANY);
+    bpf_map__update_elem(skel->maps.my_config, &uid1000, sizeof(uid1000), &user_msg, sizeof(user_msg), BPF_ANY);
 
     // ===== 5. 加载到内核 (CO-RE 重定位在此发生!) =====
     if (hello_buffer_config_bpf__load(skel) < 0) {

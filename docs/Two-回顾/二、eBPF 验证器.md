@@ -100,12 +100,136 @@ dot -Tpng out.dot -o cfg.png
 
 ---
 
+## 八、实战: 验证器错误再现
+
+本章配套代码在 `code/12-verifier/`，包含 4 个练习，每个练习对应一种典型的验证器拒绝场景。
+
+### 8.1 练习1: NULL 指针解引用
+
+**代码**: `ex1_boundary.bpf.c`  
+**错误**: 调用 `bpf_map_lookup_elem()` 后未检查 NULL 就直接解引用
+
+```c
+SEC("kprobe/do_sys_openat2")
+int BPF_KPROBE(ex1_boundary)
+{
+    u32 key = 0;
+    u64 *val = bpf_map_lookup_elem(&counters, &key);
+    // ❌ 没有检查 val 是否为 NULL!
+    *val = *val + 1;
+    return 0;
+}
+```
+
+**验证器输出** (关键行):
+
+```
+6: (85) call bpf_map_lookup_elem#1    ; R0_w=map_value_or_null(id=1,map=counters,ks=4,vs=8)
+7: (79) r1 = *(u64 *)(r0 +0)
+R0 invalid mem access 'map_value_or_null'
+```
+
+**解读**: 
+- 第 6 条指令后，R0 的类型是 `map_value_or_null` — 验证器标注了"可能为 NULL"
+- 第 7 条指令尝试读取 R0+0 处的 8 字节 → 验证器发现: 如果 R0 是 NULL，这是非法内存访问
+- 结论: 拒绝加载，返回 `-EACCES`
+
+**修复**: 在解引用前添加 `if (!val) return 0;`
+
+### 8.2 练习2: 有界循环 (验证器通过)
+
+**代码**: `ex2_bounded_loop.bpf.c`  
+**场景**: 循环上限是编译时常量
+
+```c
+for (int i = 0; i < 10; i++) {
+    u32 key = i;
+    val = bpf_map_lookup_elem(&counters, &key);
+    if (val) { total += *val; prev = val; }
+}
+```
+
+**验证器输出**:
+
+```
+processed 219 insns (limit 1000000) max_states_per_insn 1 total_states 20 peak_states 20 mark_read 10
+```
+
+**解读**:
+- 验证器逐次展开 10 次迭代 (每轮创建 2 个状态: NULL/非NULL 分支)
+- `total_states 20` = 10 次迭代 × 2 个分支
+- `max_states_per_insn 1`: 状态剪枝有效，验证器不会重复探索等价路径
+- 成功加载 ✅
+
+### 8.3 练习3: 无界循环 (验证器拒绝)
+
+**代码**: `ex3_unbounded_loop.bpf.c`  
+**错误**: 循环上限来自全局变量 `loop_limit`
+
+```c
+volatile int loop_limit = 100;
+
+for (int i = 0; i < loop_limit; i++) {
+    // ...
+}
+```
+
+**验证器输出** (截断):
+
+```
+BPF program is too large. Processed 1000001 insn
+processed 1000001 insns (limit 1000000) max_states_per_insn 4 total_states 9618 peak_states 9618 mark_read 2
+```
+
+**解读**:
+- 验证器无法静态确定 `loop_limit` 的值 → 逐次展开循环
+- 每次迭代都创建新状态 → 连锁爆炸
+- 达到 1M 指令上限 → 拒绝加载，返回 `-ENOSPC`
+
+⚠️ **注意**: ex3 的验证器日志可达 ~1MB (100 万条指令)，运行时会明显卡顿。
+
+### 8.4 练习4: 跨程序类型调用 Helper
+
+**代码**: `ex4_wrong_helper.bpf.c`  
+**错误**: kprobe 程序调用 XDP 专属 helper
+
+```c
+SEC("kprobe/do_sys_openat2")
+int BPF_KPROBE(ex4_wrong_helper)
+{
+    bpf_xdp_adjust_head((struct xdp_md *)ctx, 0);  // ❌ XDP only!
+    return 0;
+}
+```
+
+**验证器输出**: 加载失败，返回 `-EINVAL`。`bpf_xdp_adjust_head` 不在 kprobe 程序类型的 helper 白名单中。
+
+**扩展**: 查看各程序类型允许的 helper 列表:
+
+```bash
+sudo mount -t debugfs none /sys/kernel/debug  # 如果未挂载
+cat /sys/kernel/debug/bpf/bpf_prog_type_helper_whitelist
+```
+
+### 8.5 运行方法
+
+```bash
+cd code/12-verifier
+make
+sudo ./loader ex1_boundary.bpf.o       # 预期: 验证器拒绝
+sudo ./loader ex2_bounded_loop.bpf.o   # 预期: 验证器通过
+sudo ./loader ex3_unbounded_loop.bpf.o # 预期: 验证器拒绝 (日志很长!)
+sudo ./loader ex4_wrong_helper.bpf.o   # 预期: 验证器拒绝
+```
+
+---
+
 ## 📝 练习
 
-- [ ] **练习 1**: 再现 off-by-one (data.message[c] 边界检查)
-- [ ] **练习 2**: 追踪有界循环的寄存器 (`for i<10`)
-- [ ] **练习 3**: 触发无界循环报错 (`for i<c`)
-- [ ] **练习 4**: tracepoint 上下文结构体 → `invalid bpf_context access`
+- [ ] **练习 1**: 再现 NULL 指针解引用 → `R0 invalid mem access 'map_value_or_null'`
+- [ ] **练习 2**: 有界循环 `for(i<10)` → 验证器通过，观察状态剪枝
+- [ ] **练习 3**: 无界循环 `for(i<loop_limit)` → `Processed 1000001 insn`
+- [ ] **练习 4**: 跨程序类型调用 helper → helper 白名单拒绝
 
 ---
 
@@ -118,4 +242,4 @@ dot -Tpng out.dot -o cfg.png
 
 ---
 
-*最后更新: 2026-06-02*
+*最后更新: 2026-07-29*

@@ -866,9 +866,107 @@ if raw_cid in ('host', '', 'unknown'):
 
 ---
 
+## 🔧 编译 & 工具链
+
+### Q24: 为什么 `make` 时报 `BPF_KPROBE_SYSCALL` 未定义 / `u32` 类型未知 / `bpf_map__update_elem` 未定义引用？
+
+**现象**：
+
+在第二小节 Ch5 CO-RE/Libbpf 代码目录下执行 `make`，报一连串错误：
+
+```bash
+# 错误1: BPF_KPROBE_SYSCALL 未定义
+hello-buffer-config.bpf.c:42:31: error: expected identifier
+int BPF_KPROBE_SYSCALL(hello, const char *pathname)
+
+# 错误2: u32 类型未知
+hello-buffer-config.c:63:5: error: unknown type name 'u32'
+
+# 错误3: bpf_map__update_elem 未定义引用
+/usr/bin/ld: undefined reference to `bpf_map__update_elem'
+```
+
+**原因**：
+
+Ubuntu 22.04 官方仓库中的 `libbpf-dev` 是 **0.5.0**（2022年），而代码使用了 libbpf **1.0+** 才有的特性：
+
+| 特性 | libbpf 0.5.0 | libbpf 1.0+ |
+|------|:--:|:--:|
+| `BPF_KPROBE_SYSCALL()` 宏 | ❌ | ✅ |
+| `SEC("ksyscall/...")` 自动附加 | ❌ | ✅ |
+| `bpf_map__update_elem()` 新 API | ❌ | ✅ |
+| `__u32` / `u32` 类型自动引入 | ❌ | ✅ |
+
+更坑的是，`bpftool` 已经是 v7.4.0（内嵌 libbpf v1.4），所以 `bpftool gen skeleton` 能正常工作，但开发头文件和动态库仍然是 0.5.0，版本不一致导致编译失败。
+
+**解决方案**：
+
+**Step 1: 源码编译安装新版 libbpf**
+
+```bash
+# 克隆 libbpf 仓库
+cd /tmp
+git clone --depth 1 https://github.com/libbpf/libbpf.git
+cd libbpf/src
+
+# 编译
+make -j$(nproc)
+
+# 安装到 /usr (覆盖旧版头文件到 /usr/include/bpf/, 库安装到 /usr/lib64/)
+sudo make install
+```
+
+**Step 2: 注册库路径**
+
+新版 libbpf 的 `.so` 默认安装到 `/usr/lib64/`，但这个路径不在 Ubuntu 的默认动态链接搜索路径中：
+
+```bash
+echo "/usr/lib64" | sudo tee /etc/ld.so.conf.d/libbpf.conf
+sudo ldconfig
+```
+
+**Step 3: 修改 Makefile 的链接参数**
+
+即使 `ldconfig` 更新了缓存，GCC 链接器默认先搜 `/usr/lib/x86_64-linux-gnu/`（旧的 libbpf.so.0.5.0 还在），需要显式指定：
+
+```makefile
+# Makefile 中
+LDFLAGS := -L/usr/lib64 -lbpf -lelf -lz
+
+# 链接命令改为
+$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+```
+
+**Step 4: 修改用户态代码适配新 API**
+
+libbpf 1.x 中 map 操作推荐使用 `bpf_map__*` 系列（接受 `struct bpf_map *`），而不是旧的 fd-based API：
+
+```c
+// ❌ 旧写法 (libbpf 0.x)
+u32 uid0 = 0;
+int map_fd = bpf_map__fd(skel->maps.my_config);
+bpf_map_update_elem(map_fd, &uid0, &root_msg, BPF_ANY);
+
+// ✅ 新写法 (libbpf 1.x)
+__u32 uid0 = 0;
+bpf_map__update_elem(skel->maps.my_config,
+                     &uid0, sizeof(uid0),
+                     &root_msg, sizeof(root_msg), BPF_ANY);
+```
+
+同时添加必要的头文件：`#include <linux/types.h>` 和 `#include <bpf/bpf.h>`。
+
+**为什么不用 apt？**
+
+Ubuntu 22.04 的 apt 仓库中 `libbpf-dev` 最高就是 0.5.0，没有更新的版本。eBPF 生态发展极快，从源码编译是最可靠的方式。
+
+**参考**：第二小节 Ch5 CO-RE/Libbpf 编译环境搭建。对应代码目录：`code/11-libbpf/`。
+
+---
+
 ## 📚 学习资源
 
-### Q24: 有哪些好的学习资源?
+### Q25: 有哪些好的学习资源?
 
 **官方文档**:
 - [eBPF.io](https://ebpf.io/) - 官方学习路径
@@ -892,7 +990,7 @@ if raw_cid in ('host', '', 'unknown'):
 
 ## 💡 其他
 
-### Q25: 如何贡献本项目?
+### Q26: 如何贡献本项目?
 
 欢迎提交 Issue 和 Pull Request!
 

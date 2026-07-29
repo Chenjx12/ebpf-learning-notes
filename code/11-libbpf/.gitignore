@@ -1,5 +1,6 @@
 # 编译产物 (CO-RE)
 vmlinux.h
+*.bpf.o
 *.skel.h
 hello-buffer-config
 manual-attach

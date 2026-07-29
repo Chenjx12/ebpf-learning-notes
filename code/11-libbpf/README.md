@@ -20,14 +20,21 @@
 ### 前置要求
 
 ```bash
+# ⚠️ 需要 libbpf ≥ 1.0 (Ubuntu 22.04 仓库为 0.5.0, 需源码编译安装)
+# 如果 make 报错 BPF_KPROBE_SYSCALL / bpf_map__update_elem 未定义, 参考 FAQ#Q24
 # 确认 libbpf 开发库已安装
-sudo apt install libbpf-dev libelf-dev
+sudo apt install libelf-dev zlib1g-dev
+
+# 从源码编译安装 libbpf 1.x (一次性操作)
+cd /tmp && git clone --depth 1 https://github.com/libbpf/libbpf.git
+cd libbpf/src && make -j$(nproc) && sudo make install
+echo "/usr/lib64" | sudo tee /etc/ld.so.conf.d/libbpf.conf && sudo ldconfig
 
 # 确认 bpftool 可用
 bpftool version
 
 # 生成 vmlinux.h (CO-RE 依赖)
-bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > ./vmlinux.h
 ```
 
 ### 编译 & 运行
@@ -116,9 +123,9 @@ bpftool -d prog load hello-buffer-config.bpf.o /sys/fs/bpf/hello
 ## 📖 相关文档
 
 - **学习笔记**: [一、CO-RE、BTF 与 Libbpf](../../docs/Two-回顾/一、CO-RE、BTF%20与%20Libbpf.md)
-- **常见问题**: [FAQ](../../FAQ.md)
+- **常见问题**: [FAQ#Q24](../../FAQ.md)
 - **上一章代码**: [10-perf](../10-perf/)
 
 ---
 
-*最后更新: 2026-06-02*
+*最后更新: 2026-07-29*

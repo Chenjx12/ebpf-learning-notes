@@ -102,6 +102,14 @@ bpftool btf dump map name my_config
 bpftool btf dump prog name hello
 ```
 
+![列出所有加载的 BTF 数据](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260729134543308.png)
+
+
+
+![查看 vmlinux BTF (ID 1)](https://raw.githubusercontent.com/Chenjx12/PicGO/main/img/20260729134331968.png)
+
+
+
 ### 3.2 BTF 类型编码
 
 BTF 将 C 类型编码为一组类型描述符。以 `struct user_msg_t { char message[12]; }` 为例：
@@ -258,9 +266,23 @@ bpf_map_update_elem(fd, &key, &value, BPF_ANY);
 ## 📖 相关文档
 
 - **代码目录**: [code/11-libbpf/](../../code/11-libbpf/)
-- **下一篇**: [二、eBPF 验证器](./二、eBPF%20验证器.md) (待完成)
+- **下一篇**: [二、eBPF 验证器](./二、eBPF%20验证器.md) 
 - **常见问题**: [FAQ](../../FAQ.md)
 
 ---
 
-*最后更新: 2026-06-02*
+## ⚠️ 环境注意事项
+
+本目录代码需要 **libbpf ≥ 1.0**。Ubuntu 22.04 官方仓库的 `libbpf-dev` 是 0.5.0，缺少 `BPF_KPROBE_SYSCALL`、`ksyscall` 自动附加等特性，从源码编译安装即可：
+
+```bash
+git clone --depth 1 https://github.com/libbpf/libbpf.git /tmp/libbpf
+cd /tmp/libbpf/src && make -j$(nproc) && sudo make install
+echo "/usr/lib64" | sudo tee /etc/ld.so.conf.d/libbpf.conf && sudo ldconfig
+```
+
+详见 [FAQ — Q24](../../FAQ.md#q24-为什么-make-时报-bpf_kprobe_syscall-未定义--u32-类型未知--bpf_map__update_elem-未定义引用)。
+
+---
+
+*最后更新: 2026-07-29*

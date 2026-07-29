@@ -1,39 +1,53 @@
 # eBPF 示例代码 (第八篇: 用于安全的 eBPF)
 
-> 《Learning eBPF》第 9 章 — 本章无练习，以毕设项目为实践场
+> 《Learning eBPF》第 9 章 — 🎯 毕设核心章节
 
 **对应笔记**: [四、用于安全的 eBPF](../../docs/Two-回顾/四、用于安全的%20eBPF.md)
 
-## 📂 安全技术演进路线
+## 📂 文件列表
 
+| 文件名 | 说明 | 练习 |
+|--------|------|:--:|
+| `lsm_block.bpf.c` | BPF LSM 程序 — hook `path_chmod` 拒绝所有 chmod | 1, 2 |
+| `ex1_lsm.c` | 加载器, 自动检测 BPF LSM 是否激活 | 1 |
+| `Makefile` | 编译脚本 | — |
+
+## 🚀 快速开始
+
+```bash
+make
+sudo ./ex1_lsm lsm_block.bpf.o   # 阻断所有 chmod
 ```
-Seccomp-bpf (静态过滤)
-  → Falco (规则告警)
-    → LSM eBPF (内核态阻断, 5.7+)
-      → Cilium Tetragon (任意内核函数 + SIGKILL)
+
+### ⚠️ 前置: 激活 BPF LSM
+
+`CONFIG_BPF_LSM=y` 只是编译进内核, 还需要内核命令行激活。运行加载器会自动检测并提示。
+
+**修复 (需重启一次)**:
+
+```bash
+# 1. 编辑 grub
+sudo vi /etc/default/grub
+
+# 2. 在 GRUB_CMDLINE_LINUX 的 lsm= 值末尾加 ,bpf
+#    改前: lsm=lockdown,capability,landlock,yama,apparmor
+#    改后: lsm=lockdown,capability,landlock,yama,apparmor,bpf
+
+# 3. 更新 grub 并重启
+sudo update-grub && sudo reboot
+
+# 4. 验证
+cat /sys/kernel/security/lsm
+# 应包含 ",bpf"
 ```
 
-## 🔨 实践任务 (替代练习)
+## 🔨 实践任务
 
-本章没有官方练习，以下任务直接服务于毕设项目：
+本章笔记覆盖了完整的 eBPF 安全演进路线 (Seccomp → Falco → LSM → Tetragon)，代码聚焦于核心案例:
 
-### 任务 1: 用 BPF LSM 实现阻断 (替代 tracepoint 返回错误码)
-- 当前第九篇的阻断方式: tracepoint 返回 `-EPERM`
-- 升级方案: 用 `SEC("lsm/path_chmod")` 在内核态直接拒绝
-- 要求内核 ≥ 5.7
-
-### 任务 2: 学习 Falco 规则引擎设计
-- 阅读 [Falco rules](https://github.com/falcosecurity/rules) 仓库
-- 对比自己第八篇 `rules.yaml` 的设计差异
-- Falco 的宏 (macros) 和列表 (lists) 机制
-
-### 任务 3: 研究 Cilium Tetragon 的 TracingPolicy
-- [Tetragon](https://github.com/cilium/tetragon) 的 `TracingPolicy` CRD
-- 比较 Tetragon 的 `fd_install` hook 与自己项目的 kprobe 方式
-
-### 任务 4: TOCTOU 防护
-- 理解为什么 seccomp-unotify 不能用于安全策略执行
-- 对比 LSM hook (参数已在内核内存) 和 syscall tracepoint (参数在用户态) 的安全差异
+- [ ] **任务 1**: 启用 BPF LSM，加载 `lsm_block.bpf.o`，验证 `chmod` 被阻断
+- [ ] **任务 2**: 修改 `lsm_block.bpf.c` 实现条件阻断 (如只拒绝 SUID 位设置)
+- [ ] **任务 3**: 阅读笔记中的 Falco/Tetragon/TOCTOU 分析，梳理对自己毕设的改进思路
 
 ## 📖 关键工具对比
 
@@ -41,15 +55,15 @@ Seccomp-bpf (静态过滤)
 |------|------|------|------|
 | Seccomp-bpf | 每进程 syscall 过滤 | 最早支持 | 静态, 不能解引用指针 |
 | Falco | syscall tracepoint + 规则 | 可对运行中容器应用 | 只能告警, 有 TOCTOU |
-| BPF LSM | LSM hook 返回非零 | 内核态阻断, 无 TOCTOU | 需 5.7+, 企业发行版滞后 |
+| BPF LSM | LSM hook 返回非零 | 内核态阻断, 无 TOCTOU | 需 5.7+, lsm=bpf 内核参数 |
 | Tetragon | 任意内核函数 + SIGKILL | 最灵活, 同步杀死进程 | 依赖非稳定内核函数 |
 
 ## 📖 相关文档
 
 - **上一篇**: [eBPF 程序类型与附加点](../13-prog-types/)
-- **下一篇**: [用于网络的 eBPF](../15-network/) (可选)
+- **下一篇**: [补充练习](../15-extra/)
 - **FAQ**: [../../FAQ.md](../../FAQ.md)
 
 ---
 
-*最后更新: 2026-06-02*
+*最后更新: 2026-07-29*
