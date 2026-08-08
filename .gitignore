@@ -42,3 +42,6 @@ Thumbs.db
 *.log
 tmp/
 
+ebpf_ai_project_blueprint_v2.md
+.gitignore
+ebpf_ai_project_blueprint.md

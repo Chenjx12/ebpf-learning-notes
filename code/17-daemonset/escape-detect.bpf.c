@@ -1,9 +1,13 @@
-// escape-detect.c — 容器逃逸检测 (kprobe 版, BCC 直接编译)
-// 使用 BCC kprobe__ 命名约定 — BCC 自动识别并附加
-// kprobe 不受 BCC 0.18.0 + kernel 6.8 tracepoint 兼容问题影响
+// escape-detect.bpf.c — 容器逃逸检测 (libbpf 风格, clang 预编译)
+// 对应蓝图选项 B: clang 预编译 .bpf.o → BCC BPF(src_file=".bpf.o") 加载
+//
+// 编译: clang -target bpf -O2 -g -c $< -o $@
+// 加载: bpf = BPF(src_file="escape-detect.bpf.o")  # BCC 直接加载预编译 .o
 
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
+#include "vmlinux.h"
+#include <bpf/bpf_helpers.h>
+#include <bpf/bpf_tracing.h>
+#include <bpf/bpf_core_read.h>
 
 #define EVENT_MOUNT  1
 #define EVENT_PTRACE 2
@@ -24,12 +28,24 @@ struct event {
 
 struct container_id_t { char id[64]; };
 
-BPF_RINGBUF_OUTPUT(events, 1 << 8);
-BPF_HASH(container_map, u32, struct container_id_t);
+// ===== Ring Buffer =====
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
+} events SEC(".maps");
 
-static inline void get_container_id(struct event *evt) {
+// ===== PID → 容器名 映射 =====
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 10240);
+    __type(key, u32);
+    __type(value, struct container_id_t);
+} container_map SEC(".maps");
+
+// ===== 辅助函数 =====
+static __always_inline void get_container_id(struct event *evt) {
     u32 pid = evt->pid;
-    struct container_id_t *cid = container_map.lookup(&pid);
+    struct container_id_t *cid = bpf_map_lookup_elem(&container_map, &pid);
     if (cid) {
         bpf_probe_read_kernel_str(evt->container_id, sizeof(evt->container_id), cid->id);
     } else {
@@ -38,8 +54,10 @@ static inline void get_container_id(struct event *evt) {
     }
 }
 
-// BCC kprobe__ 命名约定: kprobe__<内核函数名>
-int kprobe____x64_sys_mount(struct pt_regs *ctx) {
+// ===== 探针: __x64_sys_mount =====
+SEC("kprobe/__x64_sys_mount")
+int BPF_KPROBE(kprobe_mount)
+{
     struct event evt = {};
     evt.event_type = EVENT_MOUNT;
     evt.pid = bpf_get_current_pid_tgid() >> 32;
@@ -47,17 +65,21 @@ int kprobe____x64_sys_mount(struct pt_regs *ctx) {
     evt.cgroup_id = bpf_get_current_cgroup_id();
     bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
 
-    char *fstype = (char *)PT_REGS_PARM3(ctx);
-    char *target = (char *)PT_REGS_PARM2(ctx);
+    // mount(char *source, char *target, char *fstype, ...)
+    char *fstype = (char *)PT_REGS_PARM3_CORE(ctx);
+    char *target = (char *)PT_REGS_PARM2_CORE(ctx);
     bpf_probe_read_user_str(evt.fstype, sizeof(evt.fstype), fstype);
     bpf_probe_read_user_str(evt.target_path, sizeof(evt.target_path), target);
 
     get_container_id(&evt);
-    events.ringbuf_output(&evt, sizeof(evt), 0);
+    bpf_ringbuf_output(&events, &evt, sizeof(evt), 0);
     return 0;
 }
 
-int kprobe____x64_sys_ptrace(struct pt_regs *ctx) {
+// ===== 探针: __x64_sys_ptrace =====
+SEC("kprobe/__x64_sys_ptrace")
+int BPF_KPROBE(kprobe_ptrace)
+{
     struct event evt = {};
     evt.event_type = EVENT_PTRACE;
     evt.pid = bpf_get_current_pid_tgid() >> 32;
@@ -65,15 +87,18 @@ int kprobe____x64_sys_ptrace(struct pt_regs *ctx) {
     evt.cgroup_id = bpf_get_current_cgroup_id();
     bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
 
-    evt.request_raw = PT_REGS_PARM1(ctx);
-    evt.target_pid = (u32)PT_REGS_PARM2(ctx);
+    evt.request_raw = PT_REGS_PARM1_CORE(ctx);
+    evt.target_pid = (u32)PT_REGS_PARM2_CORE(ctx);
 
     get_container_id(&evt);
-    events.ringbuf_output(&evt, sizeof(evt), 0);
+    bpf_ringbuf_output(&events, &evt, sizeof(evt), 0);
     return 0;
 }
 
-int kprobe____x64_sys_openat(struct pt_regs *ctx) {
+// ===== 探针: __x64_sys_openat =====
+SEC("kprobe/__x64_sys_openat")
+int BPF_KPROBE(kprobe_openat)
+{
     struct event evt = {};
     evt.event_type = EVENT_OPENAT;
     evt.pid = bpf_get_current_pid_tgid() >> 32;
@@ -81,10 +106,12 @@ int kprobe____x64_sys_openat(struct pt_regs *ctx) {
     evt.cgroup_id = bpf_get_current_cgroup_id();
     bpf_get_current_comm(&evt.comm, sizeof(evt.comm));
 
-    char *filename = (char *)PT_REGS_PARM2(ctx);
+    char *filename = (char *)PT_REGS_PARM2_CORE(ctx);
     bpf_probe_read_user_str(evt.target_path, sizeof(evt.target_path), filename);
 
     get_container_id(&evt);
-    events.ringbuf_output(&evt, sizeof(evt), 0);
+    bpf_ringbuf_output(&events, &evt, sizeof(evt), 0);
     return 0;
 }
+
+char LICENSE[] SEC("license") = "GPL";

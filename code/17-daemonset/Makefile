@@ -1,4 +1,4 @@
-# Makefile — eBPF 检测器容器化 + K8s 部署 (Week 2)
+# Makefile — eBPF 检测器容器化 + K8s 部署 (BCC kprobe 版)
 # 对应笔记: docs/Three-扩展/WEEK 2.md
 
 IMAGE      ?= ebpf-detector
@@ -20,7 +20,6 @@ deploy:
 	kubectl apply -f rbac.yaml
 	kubectl apply -f daemonset.yaml
 	@echo "  ✅ DaemonSet 部署完成"
-	@echo "  kubectl get pods -l app=ebpf-detector"
 
 status:
 	kubectl get pods -l app=ebpf-detector -o wide
@@ -30,12 +29,13 @@ logs:
 	kubectl logs -l app=ebpf-detector --tail=50 -f
 
 clean:
+	rm -f vmlinux.h *.bpf.o
 	kubectl delete daemonset ebpf-detector --ignore-not-found
 	kubectl delete configmap ebpf-detector-config --ignore-not-found
 	kubectl delete serviceaccount ebpf-detector --ignore-not-found
 	kubectl delete clusterrole ebpf-detector --ignore-not-found
 	kubectl delete clusterrolebinding ebpf-detector --ignore-not-found
-	@echo "  🧹 K8s 资源已清理"
+	@echo "  🧹 已清理"
 
 help:
 	@echo "  make build    构建 Docker 镜像"

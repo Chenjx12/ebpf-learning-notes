@@ -1,2 +1,5 @@
+# 预编译产物
+vmlinux.h
+*.bpf.o
 # Docker 构建产物
 *.tar

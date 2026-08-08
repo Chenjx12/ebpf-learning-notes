@@ -52,8 +52,12 @@ spec:
           - name: cgroup
             mountPath: /host/cgroup
             readOnly: true
+          - name: modules
+            mountPath: /lib/modules          # 宿主机内核头文件 (BCC 编译需要)
+          - name: usr-src
+            mountPath: /usr/src              # 内核源码 (BCC 编译需要)
           - name: docker-sock
-            mountPath: /var/run/docker.sock  # Docker SDK 通信 (Week 2~3)
+            mountPath: /var/run/docker.sock  # Docker SDK 通信
           - name: config
             mountPath: /app/config           # 规则文件挂载点
 
@@ -67,6 +71,12 @@ spec:
         - name: cgroup
           hostPath:
             path: /sys/fs/cgroup
+        - name: modules
+          hostPath:
+            path: /lib/modules
+        - name: usr-src
+          hostPath:
+            path: /usr/src
         - name: docker-sock
           hostPath:
             path: /var/run/docker.sock
